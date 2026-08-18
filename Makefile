@@ -43,6 +43,7 @@ clean:
 	@rm -f dvtm-editor
 	@rm -f tests/run tests/probe
 	@rm -rf tests/terminfo
+	@rm -rf *.dSYM
 
 dist: clean
 	@echo creating dist tarball

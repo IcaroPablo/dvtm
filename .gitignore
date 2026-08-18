@@ -8,3 +8,4 @@
 /tests/run
 /tests/probe
 /tests/terminfo/
+*.dSYM/

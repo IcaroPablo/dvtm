@@ -25,6 +25,11 @@ LIBS = -lc -lutil ${NCURSES_LIBS}
 # _DARWIN_C_SOURCE brings back SIGWINCH, which _POSIX_C_SOURCE hides on macOS;
 # every other system just ignores the macro.
 CPPFLAGS = -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -D_XOPEN_SOURCE_EXTENDED -D_DARWIN_C_SOURCE
-CFLAGS += -std=c99 ${INCS} -DNDEBUG ${CPPFLAGS}
+# Warn by default. Without this the normal build passes no -W flags at all and
+# a new warning goes unseen until someone happens to run `make debug`.
+# -Wno-unused-parameter because every key binding takes an args[] it ignores.
+WARNINGS = -Wall -Wextra -Wno-unused-parameter
+
+CFLAGS += -std=c99 ${INCS} -DNDEBUG ${WARNINGS} ${CPPFLAGS}
 
 CC ?= cc
