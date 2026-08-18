@@ -20,6 +20,7 @@
 
 #include <curses.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <sys/types.h>
 
 #ifndef NCURSES_MOUSE_VERSION
@@ -34,7 +35,7 @@ void vt_init(void);
 void vt_shutdown(void);
 
 void vt_keytable_set(char const * const keytable_overlay[], int count);
-void vt_default_colors_set(Vt*, attr_t attrs, short fg, short bg);
+void vt_default_colors_set(Vt*, attr_t attrs, int32_t fg, int32_t bg);
 void vt_title_handler_set(Vt*, vt_title_handler_t);
 void vt_urgent_handler_set(Vt*, vt_urgent_handler_t);
 void vt_data_set(Vt*, void *);
@@ -53,8 +54,8 @@ ssize_t vt_write(Vt*, const char *buf, size_t len);
 void vt_mouse(Vt*, int x, int y, mmask_t mask);
 void vt_dirty(Vt*);
 void vt_draw(Vt*, WINDOW *win, int startrow, int startcol);
-short vt_color_get(Vt*, short fg, short bg);
-short vt_color_reserve(short fg, short bg);
+int vt_color_get(Vt*, int32_t fg, int32_t bg);
+int vt_color_reserve(int32_t fg, int32_t bg);
 
 void vt_scroll(Vt*, int rows);
 void vt_noscroll(Vt*);

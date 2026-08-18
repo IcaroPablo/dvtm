@@ -60,18 +60,6 @@
 # endif
 #endif
 
-#ifdef NCURSES_VERSION
-# ifndef NCURSES_EXT_COLORS
-#  define NCURSES_EXT_COLORS 0
-# endif
-# if !NCURSES_EXT_COLORS
-#  define MAX_COLOR_PAIRS MIN(COLOR_PAIRS, 256)
-# endif
-#endif
-#ifndef MAX_COLOR_PAIRS
-# define MAX_COLOR_PAIRS COLOR_PAIRS
-#endif
-
 #if defined _AIX && defined CTRL
 # undef CTRL
 #endif
@@ -84,15 +72,14 @@
 #define LENGTH(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 static bool is_utf8, has_default_colors;
-static short color_pairs_reserved, color_pairs_max, color_pair_current;
-static short *color2palette, default_fg, default_bg;
+static int32_t default_fg, default_bg;
 static char vt_term[32];
 
 typedef struct {
 	wchar_t text;
 	attr_t attr;
-	short fg;
-	short bg;
+	int32_t fg;
+	int32_t bg;
 } Cell;
 
 typedef struct {
@@ -161,8 +148,8 @@ typedef struct {
 	attr_t curattrs, savattrs; /* current and saved attributes for cells */
 	int curs_col;          /* current cursor column (zero based) */
 	int curs_srow, curs_scol; /* saved cursor row/colmn (zero based) */
-	short curfg, curbg;    /* current fore and background colors */
-	short savfg, savbg;    /* saved colors */
+	int32_t curfg, curbg;  /* current fore and background colors */
+	int32_t savfg, savbg;  /* saved colors */
 } Buffer;
 
 struct Vt {
@@ -170,7 +157,7 @@ struct Vt {
 	Buffer buffer_alternate; /* alternate screen buffer */
 	Buffer *buffer;          /* currently active buffer (one of the above) */
 	attr_t defattrs;         /* attributes to use for normal/empty cells */
-	short deffg, defbg;      /* colors to use for back normal/empty cells (white/black) */
+	int32_t deffg, defbg;    /* colors to use for back normal/empty cells (white/black) */
 	int pty;                 /* master side pty file descriptor */
 	pid_t pid;               /* process id of the process running in this vt */
 	/* flags */
@@ -624,7 +611,35 @@ static bool is_valid_csi_ender(int c)
 }
 
 /* interprets a 'set attribute' (SGR) CSI escape sequence */
-static void interpret_csi_sgr(Vt *t, int param[], int pcount)
+/* Colors below 8 stay as ANSI indices so the host terminal's own theme decides
+ * them; everything else is a 24-bit RGB value. The 256-color palette is folded
+ * into RGB on input, so a cell carries one kind of value and alloc_pair() does
+ * the pairing. The cost is that index N and RGB 0x00000N are indistinguishable,
+ * which only matters for near-black. */
+#define RGB(r, g, b) (((r) & 0xff) << 16 | ((g) & 0xff) << 8 | ((b) & 0xff))
+
+static int32_t color_index(int i)
+{
+	static const int32_t bright[8] = { 0x7f7f7f, 0xff0000, 0x00ff00, 0xffff00,
+	                                   0x5c5cff, 0xff00ff, 0x00ffff, 0xffffff };
+	static const int cube[6] = { 0, 95, 135, 175, 215, 255 };
+
+	if (i < 8)
+		return i;
+	if (i < 16)
+		return bright[i - 8];
+	if (i < 232) {
+		i -= 16;
+		return RGB(cube[i / 36], cube[(i / 6) % 6], cube[i % 6]);
+	}
+	if (i < 256) {
+		int v = 8 + (i - 232) * 10;
+		return RGB(v, v, v);
+	}
+	return -1;
+}
+
+static void interpret_csi_sgr(Vt *t, int param[], int pcount, bool subparam)
 {
 	Buffer *b = t->buffer;
 	if (pcount == 0) {
@@ -688,8 +703,14 @@ static void interpret_csi_sgr(Vt *t, int param[], int pcount)
 			break;
 		case 38:
 			if ((i + 2) < pcount && param[i + 1] == 5) {
-				b->curfg = param[i + 2];
+				b->curfg = color_index(param[i + 2]);
 				i += 2;
+			} else if (param[i + 1] == 2) {
+				int o = subparam ? 3 : 2;
+				if ((i + o + 2) < pcount) {
+					b->curfg = RGB(param[i + o], param[i + o + 1], param[i + o + 2]);
+					i += o + 2;
+				}
 			}
 			break;
 		case 39:
@@ -700,8 +721,14 @@ static void interpret_csi_sgr(Vt *t, int param[], int pcount)
 			break;
 		case 48:
 			if ((i + 2) < pcount && param[i + 1] == 5) {
-				b->curbg = param[i + 2];
+				b->curbg = color_index(param[i + 2]);
 				i += 2;
+			} else if (param[i + 1] == 2) {
+				int o = subparam ? 3 : 2;
+				if ((i + o + 2) < pcount) {
+					b->curbg = RGB(param[i + o], param[i + o + 1], param[i + o + 2]);
+					i += o + 2;
+				}
 			}
 			break;
 		case 49:
@@ -993,6 +1020,7 @@ static void interpret_csi(Vt *t)
 	Buffer *b = t->buffer;
 	int csiparam[16];
 	unsigned int param_count = 0;
+	bool subparam = false;
 	const char *p = t->ebuf + 1;
 	char verb = t->ebuf[t->elen - 1];
 
@@ -1000,9 +1028,11 @@ static void interpret_csi(Vt *t)
 	for (p += (t->ebuf[1] == '?'); *p; p++) {
 		if (IS_CONTROL(*p)) {
 			process_nonprinting(t, *p);
-		} else if (*p == ';') {
+		} else if (*p == ';' || *p == ':') {
 			if (param_count >= LENGTH(csiparam))
 				return;	/* too long! */
+			if (*p == ':')
+				subparam = true;
 			csiparam[param_count++] = 0;
 		} else if (isdigit((unsigned char)*p)) {
 			if (param_count == 0)
@@ -1029,7 +1059,7 @@ static void interpret_csi(Vt *t)
 		interpret_csi_mode(t, csiparam, param_count, verb == 'h');
 		break;
 	case 'm': /* set attribute */
-		interpret_csi_sgr(t, csiparam, param_count);
+		interpret_csi_sgr(t, csiparam, param_count, subparam);
 		break;
 	case 'J': /* erase display */
 		interpret_csi_ed(t, csiparam, param_count);
@@ -1440,7 +1470,7 @@ int vt_process(Vt *t)
 	return 0;
 }
 
-void vt_default_colors_set(Vt *t, attr_t attrs, short fg, short bg)
+void vt_default_colors_set(Vt *t, attr_t attrs, int32_t fg, int32_t bg)
 {
 	t->defattrs = attrs;
 	t->deffg = fg;
@@ -1532,7 +1562,8 @@ void vt_draw(Vt *t, WINDOW *win, int srow, int scol)
 				if (cell->bg == -1)
 					cell->bg = t->defbg;
 				wattrset(win, cell->attr << NCURSES_ATTR_SHIFT);
-				wcolor_set(win, vt_color_get(t, cell->fg, cell->bg), NULL);
+				int pair = vt_color_get(t, cell->fg, cell->bg);
+				wcolor_set(win, 0, &pair);
 			}
 
 			if (is_utf8 && cell->text >= 128) {
@@ -1631,6 +1662,7 @@ pid_t vt_forkpty(Vt *t, const char *p, const char *argv[], const char *cwd, cons
 		for (const char **envp = env; envp && envp[0]; envp += 2)
 			setenv(envp[0], envp[1], 1);
 		setenv("TERM", vt_term, 1);
+		setenv("COLORTERM", "truecolor", 1);
 
 		if (cwd) {
 			int err = chdir(cwd);
@@ -1763,91 +1795,43 @@ void vt_mouse(Vt *t, int x, int y, mmask_t mask)
 #endif /* NCURSES_MOUSE_VERSION */
 }
 
-static unsigned int color_hash(short fg, short bg)
+int vt_color_get(Vt *t, int32_t fg, int32_t bg)
 {
 	if (fg == -1)
-		fg = COLORS;
-	if (bg == -1)
-		bg = COLORS + 1;
-	return fg * (COLORS + 2) + bg;
-}
-
-short vt_color_get(Vt *t, short fg, short bg)
-{
-	if (fg >= COLORS)
 		fg = (t ? t->deffg : default_fg);
-	if (bg >= COLORS)
+	if (bg == -1)
 		bg = (t ? t->defbg : default_bg);
 
 	if (!has_default_colors) {
 		if (fg == -1)
-			fg = (t && t->deffg != -1 ? t->deffg : default_fg);
+			fg = default_fg;
 		if (bg == -1)
-			bg = (t && t->defbg != -1 ? t->defbg : default_bg);
+			bg = default_bg;
 	}
 
-	if (!color2palette || (fg == -1 && bg == -1))
-		return 0;
-	unsigned int index = color_hash(fg, bg);
-	if (color2palette[index] == 0) {
-		short oldfg, oldbg;
-		for (;;) {
-			if (++color_pair_current >= color_pairs_max)
-				color_pair_current = color_pairs_reserved + 1;
-			pair_content(color_pair_current, &oldfg, &oldbg);
-			unsigned int old_index = color_hash(oldfg, oldbg);
-			if (color2palette[old_index] >= 0) {
-				if (init_pair(color_pair_current, fg, bg) == OK) {
-					color2palette[old_index] = 0;
-					color2palette[index] = color_pair_current;
-				}
-				break;
-			}
-		}
-	}
-
-	short color_pair = color2palette[index];
-	return color_pair >= 0 ? color_pair : -color_pair;
-}
-
-short vt_color_reserve(short fg, short bg)
-{
-	if (!color2palette || fg >= COLORS || bg >= COLORS)
-		return 0;
-	if (!has_default_colors && fg == -1)
-		fg = default_fg;
-	if (!has_default_colors && bg == -1)
-		bg = default_bg;
 	if (fg == -1 && bg == -1)
 		return 0;
-	unsigned int index = color_hash(fg, bg);
-	if (color2palette[index] >= 0) {
-		if (init_pair(color_pairs_reserved + 1, fg, bg) == OK)
-			color2palette[index] = -(++color_pairs_reserved);
-	}
-	short color_pair = color2palette[index];
-	return color_pair >= 0 ? color_pair : -color_pair;
+
+	int pair = alloc_pair(fg, bg);
+	return pair > 0 ? pair : 0;
+}
+
+/* Reserving is no longer meaningful: alloc_pair() hands back the same pair for
+ * the same combination and only recycles once the 65536 run out. */
+int vt_color_reserve(int32_t fg, int32_t bg)
+{
+	return vt_color_get(NULL, fg, bg);
 }
 
 static void init_colors(void)
 {
-	pair_content(0, &default_fg, &default_bg);
-	if (default_fg == -1)
-		default_fg = COLOR_WHITE;
-	if (default_bg == -1)
-		default_bg = COLOR_BLACK;
+	/* pair_content may fail (curses without color): uninitialized, these would
+	 * carry stack garbage into the default colors */
+	short fg = -1, bg = -1;
+	pair_content(0, &fg, &bg);
+	default_fg = fg == -1 ? COLOR_WHITE : fg;
+	default_bg = bg == -1 ? COLOR_BLACK : bg;
 	has_default_colors = (use_default_colors() == OK);
-	color_pairs_max = MIN(MAX_COLOR_PAIRS, SHRT_MAX);
-	if (COLORS)
-		color2palette = calloc((COLORS + 2) * (COLORS + 2), sizeof(short));
-	/*
-	 * XXX: On undefined color-pairs NetBSD curses pair_content() set fg
-	 *      and bg to default colors while ncurses set them respectively to
-	 *      0 and 0. Initialize all color-pairs in order to have consistent
-	 *      behaviour despite the implementation used.
-	 */
-	for (short i = 1; i < color_pairs_max; i++)
-		init_pair(i, 0, 0);
 	vt_color_reserve(COLOR_WHITE, COLOR_BLACK);
 }
 
@@ -1872,7 +1856,6 @@ void vt_keytable_set(const char * const keytable_overlay[], int count)
 
 void vt_shutdown(void)
 {
-	free(color2palette);
 }
 
 void vt_title_handler_set(Vt *t, vt_title_handler_t handler)

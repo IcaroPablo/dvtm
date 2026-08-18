@@ -91,7 +91,7 @@ typedef struct {
 	short bg;
 	short fg256;
 	short bg256;
-	short pair;
+	int pair;
 } Color;
 
 typedef struct {
