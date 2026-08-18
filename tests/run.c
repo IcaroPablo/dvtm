@@ -542,6 +542,39 @@ static void t_kill_removes_window(void)
 	reap();
 }
 
+/* Copy mode is the only user of vt_forkpty()'s to/from pipes: dvtm hands the
+ * window's contents to an editor over one pipe and reads the selection back
+ * over the other. Nothing else exercises that path, so a change to how children
+ * are forked can break it silently -- which is exactly what Phase 2 changed.
+ *
+ * Asserts on dvtm-editor's own status line rather than on the copied text,
+ * because the text is on screen either way; the status line only appears if the
+ * editor really started and received the buffer. */
+static void t_copymode(void)
+{
+	char chord[2];
+
+	start("tests/probe mark COPYTEXT", NULL, NULL);
+	if (!wait_screen("COPYTEXT", 6000)) {
+		fail("copy mode starts the editor", "the window never appeared");
+		reap();
+		return;
+	}
+	settle(800);
+
+	chord[0] = MOD;
+	chord[1] = 'e';
+	tty_write(chord, 2);
+
+	check("copy mode starts the editor over the pipe pair",
+	      wait_screen("NORMAL", 6000),
+	      "dvtm-editor never showed its status line; the to/from pipes did not work");
+	check("copy mode keeps the window contents",
+	      screen_has("COPYTEXT"),
+	      "the editor started but the window text did not reach it");
+	reap();
+}
+
 /* The regression this exists for: keystrokes silently lost while signals were
  * blocked. Send the chords back to back in a single write, with no settling —
  * spacing them out is exactly what hides the bug.
@@ -623,6 +656,7 @@ int main(int argc, char *argv[])
 
 	/* Deterministic child shell, whatever the developer's login shell is. */
 	setenv("SHELL", "/bin/sh", 1);
+	unsetenv("DVTM_EDITOR"); /* copy mode must use the built dvtm-editor */
 	signal(SIGPIPE, SIG_IGN);
 
 	build_terminfo();
@@ -632,6 +666,7 @@ int main(int argc, char *argv[])
 	t_truecolor();
 	t_manycolors();
 	t_backspace();
+	t_copymode();
 	t_kill_removes_window();
 	t_no_dropped_keys();
 
