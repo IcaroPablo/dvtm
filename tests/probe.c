@@ -86,6 +86,10 @@ int main(int argc, char *argv[])
 
 	if (!strcmp(what, "dsr")) {
 		ask("DSR5", "\033[5n");           /* expect ESC[0n */
+	} else if (!strcmp(what, "osc11")) {
+		/* Ask the terminal for its background colour. vt.c never answered
+		 * this; libvterm does, so a reply here is proof the engine changed. */
+		ask("OSC11", "\033]11;?\033\\");
 	} else if (!strcmp(what, "cursor")) {
 		ask("CPR", "\033[6n");            /* expect ESC[<row>;<col>R */
 	} else if (!strcmp(what, "truecolor")) {
@@ -97,10 +101,16 @@ int main(int argc, char *argv[])
 		printf("\033[38;5;196mPAL256\033[0m\n");         /* palette 196     */
 		fflush(stdout);
 	} else if (!strcmp(what, "manycolors")) {
-		/* more than 255 distinct foreground colours on screen at once, to
-		 * exercise the extended colour-pair path rather than the 256 slots */
+		/* More than 255 distinct foreground colours at once, to exercise the
+		 * extended colour-pair path rather than the 256 palette slots.
+		 *
+		 * Red is kept at 1 or 2 so every colour is far above the 0-7 range.
+		 * A colour whose packed value lands there is the same number as an
+		 * ANSI colour, and a direct-colour terminfo emits it in the short
+		 * form -- which is correct, but indistinguishable from a palette
+		 * colour when counting 24-bit colours on the wire. */
 		for (int i = 0; i < 300; i++) {
-			int r = (i * 7) & 0xff, g = (i * 13) & 0xff, b = (i * 29) & 0xff;
+			int r = 1 + (i / 256), g = i & 0xff, b = 100;
 			printf("\033[38;2;%d;%d;%dm#\033[0m", r, g, b);
 			if ((i % 60) == 59)
 				printf("\n");
@@ -114,6 +124,18 @@ int main(int argc, char *argv[])
 		 * itself, which is deterministic, rather than a shell prompt, which is
 		 * not. */
 		printf("ABCDEF\b\b\bXYZ\n");
+		fflush(stdout);
+	} else if (!strcmp(what, "env")) {
+		/* What the child was actually handed. dvtm sets TERM for its children;
+		 * if it is empty or wrong, every curses program inside dvtm misbehaves
+		 * and nothing else in the suite would notice. */
+		printf("TERM=[%s]\n", getenv("TERM") ? getenv("TERM") : "");
+		printf("COLORTERM=[%s]\n", getenv("COLORTERM") ? getenv("COLORTERM") : "");
+		fflush(stdout);
+	} else if (!strcmp(what, "plain")) {
+		/* Deliberately no SGR at all: these cells must come out in the
+		 * terminal's default colours, not in some colour of dvtm's choosing. */
+		printf("PLAINTEXT\n");
 		fflush(stdout);
 	} else if (!strcmp(what, "mark")) {
 		printf("%s\n", argc > 2 ? argv[2] : "MARK");
