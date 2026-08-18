@@ -245,6 +245,12 @@ static bool mouse_events_enabled = ENABLE_MOUSE;
 static Layout *layout = layouts;
 static StatusBar bar = { .fd = -1, .lastpos = BAR_POS, .pos = BAR_POS, .autohide = BAR_AUTOHIDE, .h = 1 };
 static CmdFifo cmdfifo = { .fd = -1 };
+/* Self-pipe, so a handler can wake the main loop. pselect(2) on macOS ignores
+ * its sigmask argument, so the "block the signal, unblock it only while
+ * waiting" pattern never delivers SIGCHLD there and dead clients stay on
+ * screen forever. A byte in the pipe wakes select() on any platform, with no
+ * race: a signal arriving before the wait leaves the byte already queued. */
+static int sigpipe[2] = { -1, -1 };
 static const char *shell;
 static Register copyreg;
 static volatile sig_atomic_t running = true;
@@ -705,6 +711,16 @@ get_client_by_coord(unsigned int x, unsigned int y) {
 	return NULL;
 }
 
+/* async-signal-safe: only write(2) */
+static void
+wake_main_loop(void) {
+	if (sigpipe[1] == -1)
+		return;
+	char b = 0;
+	ssize_t unused = write(sigpipe[1], &b, 1);
+	(void)unused;
+}
+
 static void
 sigchld_handler(int sig) {
 	int errsv = errno;
@@ -722,6 +738,8 @@ sigchld_handler(int sig) {
 		}
 
 		debug("child with pid %d died\n", pid);
+
+		wake_main_loop();
 
 		for (Client *c = clients; c; c = c->next) {
 			if (c->pid == pid) {
@@ -741,6 +759,7 @@ sigchld_handler(int sig) {
 static void
 sigwinch_handler(int sig) {
 	screen.need_resize = true;
+	wake_main_loop();
 }
 
 static void
@@ -971,6 +990,11 @@ setup(void) {
 		colors[i].pair = vt_color_reserve(colors[i].fg, colors[i].bg);
 	}
 	resize_screen();
+	if (pipe(sigpipe) == 0) {
+		for (int i = 0; i < 2; i++)
+			fcntl(sigpipe[i], F_SETFD, FD_CLOEXEC);
+		fcntl(sigpipe[1], F_SETFL, O_NONBLOCK);
+	}
 	struct sigaction sa;
 	memset(&sa, 0, sizeof sa);
 	sa.sa_flags = 0;
@@ -1824,20 +1848,24 @@ parse_args(int argc, char *argv[]) {
 int
 main(int argc, char *argv[]) {
 	unsigned int key_index = 0;
+	sigset_t blockset;
 	memset(keys, 0, sizeof(keys));
-	sigset_t emptyset, blockset;
 
 	setenv("DVTM", VERSION, 1);
+	/* Signals stay blocked while we process input: a handler firing inside
+	 * getch(2) would interrupt it and drop the keystroke. They are unblocked
+	 * only around select(2) -- see the self-pipe comment above for why
+	 * pselect(2) cannot do this for us. */
+	sigemptyset(&blockset);
+	sigaddset(&blockset, SIGWINCH);
+	sigaddset(&blockset, SIGCHLD);
+	sigprocmask(SIG_BLOCK, &blockset, NULL);
+
 	if (!parse_args(argc, argv)) {
 		setup();
 		startup(NULL);
 	}
 
-	sigemptyset(&emptyset);
-	sigemptyset(&blockset);
-	sigaddset(&blockset, SIGWINCH);
-	sigaddset(&blockset, SIGCHLD);
-	sigprocmask(SIG_BLOCK, &blockset, NULL);
 
 	while (running) {
 		int r, nfds = 0;
@@ -1850,6 +1878,11 @@ main(int argc, char *argv[]) {
 
 		FD_ZERO(&rd);
 		FD_SET(STDIN_FILENO, &rd);
+
+		if (sigpipe[0] != -1) {
+			FD_SET(sigpipe[0], &rd);
+			nfds = MAX(nfds, sigpipe[0]);
+		}
 
 		if (cmdfifo.fd != -1) {
 			FD_SET(cmdfifo.fd, &rd);
@@ -1877,13 +1910,21 @@ main(int argc, char *argv[]) {
 		}
 
 		doupdate();
-		r = pselect(nfds + 1, &rd, NULL, NULL, NULL, &emptyset);
+		sigprocmask(SIG_UNBLOCK, &blockset, NULL);
+		r = select(nfds + 1, &rd, NULL, NULL, NULL);
+		sigprocmask(SIG_BLOCK, &blockset, NULL);
 
 		if (r < 0) {
 			if (errno == EINTR)
 				continue;
 			perror("select()");
 			exit(EXIT_FAILURE);
+		}
+
+		if (sigpipe[0] != -1 && FD_ISSET(sigpipe[0], &rd)) {
+			char discard[64];
+			while (read(sigpipe[0], discard, sizeof discard) > 0)
+				;
 		}
 
 		if (FD_ISSET(STDIN_FILENO, &rd)) {
