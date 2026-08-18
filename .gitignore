@@ -3,3 +3,8 @@
 /dvtm-editor
 *.css
 *.html
+/.clangd
+/.cache/
+/tests/run
+/tests/probe
+/tests/terminfo/

@@ -13,6 +13,13 @@ NCURSES_CONFIG ?= $(shell command -v ncursesw6-config || command -v ncurses6-con
 NCURSES_CFLAGS ?= $(shell ${NCURSES_CONFIG} --cflags 2>/dev/null)
 NCURSES_LIBS ?= $(shell ${NCURSES_CONFIG} --libs 2>/dev/null || echo -lncursesw)
 
+# libvterm ships no *-config script, only a pkg-config file, and pkg-config is
+# not everywhere. So the build asks for nothing and honours the environment
+# instead: override these two if your libvterm is outside the compiler's
+# default search path. See README.md.
+VTERM_CFLAGS ?=
+VTERM_LIBS ?= -lvterm
+
 INCS = -I. ${NCURSES_CFLAGS}
 LIBS = -lc -lutil ${NCURSES_LIBS}
 # _DARWIN_C_SOURCE brings back SIGWINCH, which _POSIX_C_SOURCE hides on macOS;
