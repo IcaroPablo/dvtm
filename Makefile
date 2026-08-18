@@ -28,10 +28,21 @@ man:
 debug: clean
 	@$(MAKE) CFLAGS='${DEBUG_CFLAGS}'
 
+test: dvtm tests/run tests/probe
+	@tests/run ./dvtm
+
+tests/run: tests/run.c
+	${CC} ${CFLAGS} ${VTERM_CFLAGS} $< ${LDFLAGS} ${VTERM_LIBS} -o $@
+
+tests/probe: tests/probe.c
+	${CC} ${CFLAGS} $< ${LDFLAGS} -o $@
+
 clean:
 	@echo cleaning
 	@rm -f dvtm
 	@rm -f dvtm-editor
+	@rm -f tests/run tests/probe
+	@rm -rf tests/terminfo
 
 dist: clean
 	@echo creating dist tarball
@@ -61,4 +72,4 @@ uninstall:
 	@echo removing manual page from ${DESTDIR}${MANPREFIX}/man1
 	@rm -f ${DESTDIR}${MANPREFIX}/man1/dvtm.1
 
-.PHONY: all clean dist install uninstall debug
+.PHONY: all clean dist install uninstall debug test
