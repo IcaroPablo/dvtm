@@ -185,7 +185,6 @@ static void focusid(const char *args[]);
 static void focusnext(const char *args[]);
 static void focusnextnm(const char *args[]);
 static void focusprev(const char *args[]);
-static void focusprevnm(const char *args[]);
 static void focuslast(const char *args[]);
 static void focusup(const char *args[]);
 static void focusdown(const char *args[]);
@@ -1283,21 +1282,6 @@ focusprev(const char *args[]) {
 	}
 	if (c)
 		focus(c);
-}
-
-static void
-focusprevnm(const char *args[]) {
-	if (!sel)
-		return;
-	Client *c = sel;
-	do {
-		for (c = c->prev; c && !isvisible(c); c = c->prev);
-		if (!c) {
-			for (c = clients; c && c->next; c = c->next);
-			for (; c && !isvisible(c); c = c->prev);
-		}
-	} while (c && c != sel && c->minimized);
-	focus(c);
 }
 
 static void

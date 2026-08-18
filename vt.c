@@ -471,14 +471,6 @@ static Row *buffer_row_first(Buffer *b) {
 	return bstart;
 }
 
-static Row *buffer_row_last(Buffer *b) {
-	Row *aend;
-	if (!b->scroll_size || !b->scroll_below)
-		return b->lines + b->rows - 1;
-	buffer_boundry(b, NULL, NULL, NULL, &aend);
-	return aend;
-}
-
 static Row *buffer_row_next(Buffer *b, Row *row)
 {
 	Row *before_start, *before_end, *after_start, *after_end;
@@ -500,29 +492,6 @@ static Row *buffer_row_next(Buffer *b, Row *row)
 	if (row == &b->scroll_buf[b->scroll_size - 1])
 		return b->scroll_buf;
 	return ++row;
-}
-
-static Row *buffer_row_prev(Buffer *b, Row *row)
-{
-	Row *before_start, *before_end, *after_start, *after_end;
-	Row *first = b->lines, *last = b->lines + b->rows - 1;
-
-	if (!row)
-		return NULL;
-
-	buffer_boundry(b, &before_start, &before_end, &after_start, &after_end);
-
-	if (row > first && row <= last)
-		return --row;
-	if (row == first)
-		return before_end;
-	if (row == before_start)
-		return NULL;
-	if (row == after_start)
-		return last;
-	if (row == b->scroll_buf)
-		return &b->scroll_buf[b->scroll_size - 1];
-	return --row;
 }
 
 static void cursor_clamp(Vt *t)
