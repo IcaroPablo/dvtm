@@ -1451,6 +1451,15 @@ int vt_process(Vt *t)
 	res = read(t->pty, t->rbuf + t->rlen, sizeof(t->rbuf) - t->rlen);
 	if (res < 0)
 		return -1;
+	/* End of file: the process on the other end is gone. Linux reports that as
+	 * a read failure with EIO, which is the only case the caller used to
+	 * handle; macOS and the BSDs report a zero-byte read instead, so the
+	 * client was never noticed as dead and its window stayed on screen. Report
+	 * it the same way on every system. */
+	if (res == 0) {
+		errno = EIO;
+		return -1;
+	}
 
 	t->rlen += res;
 	while (pos < t->rlen) {
