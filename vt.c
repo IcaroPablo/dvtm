@@ -1127,9 +1127,17 @@ static void interpret_csi(Vt *t)
 	case 'u': /* restore cursor location */
 		cursor_restore(t);
 		break;
-	case 'n': /* query cursor location */
-		if (param_count == 1 && csiparam[0] == 6)
-			send_curs(t);
+	case 'n': /* device status report */
+		if (param_count == 1) {
+			if (csiparam[0] == 6)
+				send_curs(t);
+			else if (csiparam[0] == 5)
+				/* "no malfunction". Nvim sends this after a query
+				 * such as OSC 11 to learn when the reply would
+				 * have arrived; without it, it waits the whole
+				 * timeout and warns */
+				vt_write(t, "\e[0n", 4);
+		}
 		break;
 	default:
 		break;
