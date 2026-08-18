@@ -1,6 +1,6 @@
 # Customize below to fit your system
 
-PREFIX ?= /usr/local
+PREFIX ?= ${HOME}/.local
 MANPREFIX = ${PREFIX}/share/man
 # specify your systems terminfo directory
 # leave empty to install into your home folder
