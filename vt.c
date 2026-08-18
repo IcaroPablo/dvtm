@@ -38,17 +38,6 @@
 # define NCURSES_ATTR_SHIFT 8
 #endif
 
-#ifndef NCURSES_ACS
-# ifdef PDCURSES
-#  define NCURSES_ACS(c) (acs_map[(unsigned char)(c)])
-# else /* BSD curses */
-#  define NCURSES_ACS(c) (_acs_map[(unsigned char)(c)])
-# endif
-#endif
-
-#if defined _AIX && defined CTRL
-# undef CTRL
-#endif
 #ifndef CTRL
 # define CTRL(k)   ((k) & 0x1F)
 #endif

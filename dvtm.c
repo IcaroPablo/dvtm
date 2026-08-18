@@ -33,14 +33,8 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <pwd.h>
-#if defined __CYGWIN__ || defined __sun
-# include <termios.h>
-#endif
+#include <termios.h>
 #include "vt.h"
-
-#ifdef PDCURSES
-int ESCDELAY;
-#endif
 
 #ifndef NCURSES_REENTRANT
 # define set_escdelay(d) (ESCDELAY = (d))
@@ -101,9 +95,6 @@ typedef struct {
 } ColorRule;
 
 #define ALT(k)      ((k) + (161 - 'a'))
-#if defined CTRL && defined _AIX
-  #undef CTRL
-#endif
 #ifndef CTRL
   #define CTRL(k)   ((k) & 0x1F)
 #endif
