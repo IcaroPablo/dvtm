@@ -14,15 +14,24 @@ NCURSES_CFLAGS ?= $(shell ${NCURSES_CONFIG} --cflags 2>/dev/null)
 NCURSES_LIBS ?= $(shell ${NCURSES_CONFIG} --libs 2>/dev/null || echo -lncursesw)
 
 # libvterm ships no *-config script, only a pkg-config file, and pkg-config is
-# not everywhere. So the build asks for nothing and honours the environment
-# instead: override these two if your libvterm is outside the compiler's
-# default search path. See README.md.
-VTERM_CFLAGS ?=
-VTERM_LIBS ?= -lvterm
+# not everywhere. Rather than take on that tool, look for the header in the
+# usual prefixes and use whichever one actually has it. This asks the file
+# system, not the operating system, so there is nothing here to keep in sync
+# with a list of platforms: a prefix that does not exist simply does not match.
+#
+# Both variables are ?=, so the environment still wins:
+#   make VTERM_CFLAGS=-I/somewhere/include VTERM_LIBS='-L/somewhere/lib -lvterm'
+VTERM_PREFIX := $(patsubst %/include/vterm.h,%,$(firstword $(wildcard \
+	/opt/homebrew/include/vterm.h \
+	/opt/local/include/vterm.h \
+	/usr/local/include/vterm.h \
+	/usr/include/vterm.h)))
+VTERM_CFLAGS ?= $(if ${VTERM_PREFIX},-I${VTERM_PREFIX}/include)
+VTERM_LIBS ?= $(if ${VTERM_PREFIX},-L${VTERM_PREFIX}/lib )-lvterm
 
-INCS = -I. ${NCURSES_CFLAGS}
+INCS = -I. ${NCURSES_CFLAGS} ${VTERM_CFLAGS}
 # -lutil is gone with forkpty(3): it was the only thing here that needed it.
-LIBS = -lc ${NCURSES_LIBS}
+LIBS = -lc ${NCURSES_LIBS} ${VTERM_LIBS}
 # _DARWIN_C_SOURCE brings back SIGWINCH, which _POSIX_C_SOURCE hides on macOS;
 # every other system just ignores the macro.
 CPPFLAGS = -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -D_XOPEN_SOURCE_EXTENDED -D_DARWIN_C_SOURCE
