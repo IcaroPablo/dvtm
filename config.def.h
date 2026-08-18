@@ -123,7 +123,7 @@ static KeyBinding bindings[] = {
 	{ { MOD, KEY_PPAGE,    }, { scrollback,     { "-1" }                    } },
 	{ { MOD, KEY_NPAGE,    }, { scrollback,     { "1"  }                    } },
 	{ { MOD, '?',          }, { create,         { "man dvtm", "dvtm help" } } },
-	{ { MOD, MOD,          }, { send,           { (const char []){MOD, 0} } } },
+	{ { MOD, MOD,          }, { sendkeys,       { (const char []){MOD, 0} } } },
 	{ { KEY_SPREVIOUS,     }, { scrollback,     { "-1" }                    } },
 	{ { KEY_SNEXT,         }, { scrollback,     { "1"  }                    } },
 	{ { MOD, '0',          }, { view,           { NULL }                    } },
