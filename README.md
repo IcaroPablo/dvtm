@@ -96,7 +96,15 @@ different so far:
 
 **Known**
 
-  * `OSC 11`, a program asking for the background colour, is still unanswered.
+  * `OSC 11`, a program asking for the background colour, is unanswered.
+    libvterm does not answer it either -- it cannot know the real terminal's
+    colours -- so this has to be implemented here if it is wanted.
+  * Colours written in the `38:2::r:g:b` form are read wrongly. That is the
+    standards-conformant spelling, with an empty colourspace field, and
+    libvterm 0.3.3 drops the empty field and shifts the values. Programs that
+    ask terminfo how to set a colour are unaffected, because the terminfo
+    installed here uses the `38;2;r;g;b` form; only programs that hardcode the
+    other spelling see wrong colours.
 
 ## Building and testing
 
@@ -115,18 +123,26 @@ Run the tests:
 
     make test
 
-`libvterm` ships no `*-config` script, so the build does not go looking for it:
-it compiles against `-lvterm` and expects the compiler to find the header. If
-your libvterm lives outside the default search path — anywhere managed by a
-package manager, typically — say so through the environment rather than editing
-the makefiles:
+### If the build stops at `'vterm.h' file not found`
 
-    export VTERM_CFLAGS="-I/opt/homebrew/include"
-    export VTERM_LIBS="-L/opt/homebrew/lib -lvterm"
+That is not a missing install; it means the build could not work out **where**
+libvterm is. `config.mk` looks for the header under `/opt/homebrew`,
+`/opt/local`, `/usr/local` and `/usr`, and uses whichever prefix actually has
+it. If yours is somewhere else, say so:
 
-The same applies to any other prefix; substitute your own. Keeping this in the
-environment is deliberate — it is what lets `config.mk` name no operating
-system and no package manager, so the build stays the same everywhere.
+    make VTERM_CFLAGS=-I/your/prefix/include \
+         VTERM_LIBS='-L/your/prefix/lib -lvterm'
+
+or export the same two variables. Both override the search, so nothing in
+`config.mk` needs editing.
+
+To see what it decided, ask make to show the command without running it:
+
+    make -n dvtm | tr ' ' '\n' | grep vterm
+
+Note that `make` prints `Nothing to be done for 'all'` when the binaries are
+already newer than the sources. That is not a failure — touch a source, or run
+`make clean`, if you want to force a rebuild.
 
 `make test` needs no `make install` first: it compiles `dvtm.info` into a
 throwaway terminfo tree under `tests/` and points the spawned dvtm at it.
