@@ -21,7 +21,8 @@ VTERM_CFLAGS ?=
 VTERM_LIBS ?= -lvterm
 
 INCS = -I. ${NCURSES_CFLAGS}
-LIBS = -lc -lutil ${NCURSES_LIBS}
+# -lutil is gone with forkpty(3): it was the only thing here that needed it.
+LIBS = -lc ${NCURSES_LIBS}
 # _DARWIN_C_SOURCE brings back SIGWINCH, which _POSIX_C_SOURCE hides on macOS;
 # every other system just ignores the macro.
 CPPFLAGS = -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -D_XOPEN_SOURCE_EXTENDED -D_DARWIN_C_SOURCE

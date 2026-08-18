@@ -32,21 +32,7 @@
 #include <sys/types.h>
 #include <termios.h>
 #include <wchar.h>
-#if defined(__linux__) || defined(__CYGWIN__)
-# include <pty.h>
-#elif defined(__FreeBSD__) || defined(__DragonFly__)
-# include <libutil.h>
-#elif defined(__OpenBSD__) || defined(__NetBSD__) || defined(__APPLE__)
-# include <util.h>
-#endif
-
 #include "vt.h"
-
-#ifdef _AIX
-# include "forkpty-aix.c"
-#elif defined __sun
-# include "forkpty-sunos.c"
-#endif
 
 #ifndef NCURSES_ATTR_SHIFT
 # define NCURSES_ATTR_SHIFT 8
@@ -1600,6 +1586,66 @@ void vt_noscroll(Vt *t)
 		vt_scroll(t, scroll_below);
 }
 
+/* Open a pty and fork, returning 0 in the child and the child's pid in the
+ * parent, with the master descriptor in *master.
+ *
+ * This is forkpty(3) written out. forkpty is not POSIX: it lives in <pty.h> on
+ * glibc, <libutil.h> on FreeBSD and <util.h> on the other BSDs, and not at all
+ * on AIX or SunOS -- which is why dvtm used to carry a per-system include
+ * hunt and two hand-written replacements. posix_openpt, grantpt, unlockpt and
+ * ptsname are all POSIX and need none of that. */
+static pid_t pty_fork(int *master, const struct winsize *ws)
+{
+	int mfd, sfd;
+	const char *name;
+	pid_t pid;
+
+	if ((mfd = posix_openpt(O_RDWR | O_NOCTTY)) < 0)
+		return -1;
+	if (grantpt(mfd) < 0 || unlockpt(mfd) < 0 || !(name = ptsname(mfd))) {
+		close(mfd);
+		return -1;
+	}
+	if ((sfd = open(name, O_RDWR | O_NOCTTY)) < 0) {
+		close(mfd);
+		return -1;
+	}
+
+	/* Size the pty through the slave. Linux accepts TIOCSWINSZ on either end,
+	 * macOS rejects it on the master with ENOTTY, and a pty left at 0x0 makes
+	 * the child draw nothing at all. */
+	if (ws && ioctl(sfd, TIOCSWINSZ, ws) < 0) {
+		close(sfd);
+		close(mfd);
+		return -1;
+	}
+
+	switch ((pid = fork())) {
+	case -1:
+		close(sfd);
+		close(mfd);
+		return -1;
+	case 0:
+		close(mfd);
+		/* New session first, then claim the pty as its controlling terminal:
+		 * TIOCSCTTY only works for a session leader that has none. */
+		if (setsid() < 0)
+			_exit(1);
+		if (ioctl(sfd, TIOCSCTTY, 0) < 0)
+			_exit(1);
+		dup2(sfd, STDIN_FILENO);
+		dup2(sfd, STDOUT_FILENO);
+		dup2(sfd, STDERR_FILENO);
+		if (sfd > STDERR_FILENO)
+			close(sfd);
+		return 0;
+	default:
+		close(sfd);
+		*master = mfd;
+		return pid;
+	}
+}
+
 pid_t vt_forkpty(Vt *t, const char *p, const char *argv[], const char *cwd, const char *env[], int *to, int *from)
 {
 	int vt2ed[2], ed2vt[2];
@@ -1617,13 +1663,11 @@ pid_t vt_forkpty(Vt *t, const char *p, const char *argv[], const char *cwd, cons
 		from = NULL;
 	}
 
-	pid_t pid = forkpty(&t->pty, NULL, NULL, &ws);
+	pid_t pid = pty_fork(&t->pty, &ws);
 	if (pid < 0)
 		return -1;
 
 	if (pid == 0) {
-		setsid();
-
 		sigset_t emptyset;
 		sigemptyset(&emptyset);
 		sigprocmask(SIG_SETMASK, &emptyset, NULL);
