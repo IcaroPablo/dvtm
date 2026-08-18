@@ -49,11 +49,18 @@ dist: clean
 	@echo creating dist tarball
 	@git archive --prefix=dvtm-${VERSION}/ -o dvtm-${VERSION}.tar.gz HEAD
 
+# The rm before each cp is not tidiness. Overwriting an executable in place
+# leaves macOS holding a code signature that no longer matches the bytes, and
+# the kernel kills the process the moment it is run -- no output, no error,
+# exit 137. Unlinking first means the copy lands on a fresh inode with a fresh
+# signature. Unlinking is also safe for a copy that is currently running: the
+# running process keeps the old inode until it exits.
 install: all
 	@mkdir -p ${DESTDIR}${PREFIX}/bin
 	@for b in ${BIN}; do \
 		echo "installing ${DESTDIR}${PREFIX}/bin/$$b"; \
-		cp -f "$$b" "${DESTDIR}${PREFIX}/bin" && \
+		rm -f "${DESTDIR}${PREFIX}/bin/$$b" && \
+		cp "$$b" "${DESTDIR}${PREFIX}/bin/$$b" && \
 		chmod 755 "${DESTDIR}${PREFIX}/bin/$$b"; \
 	done
 	@echo installing manual page to ${DESTDIR}${MANPREFIX}/man1
