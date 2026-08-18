@@ -1934,7 +1934,20 @@ main(int argc, char *argv[]) {
 		}
 
 		if (FD_ISSET(STDIN_FILENO, &rd)) {
-			int code = getch();
+			int code;
+			/* Drain what ncurses already holds. select() reports the
+			 * descriptor, but getch() reads ahead into ncurses' own buffer:
+			 * after the first key the descriptor is quiet again, so reading
+			 * one key per wakeup strands the rest of a burst until unrelated
+			 * input happens to arrive. Typing quickly or pasting lost keys.
+			 * nodelay is re-armed each pass because keypress() clears it. */
+			for (;;) {
+			nodelay(stdscr, TRUE);
+			code = getch();
+			if (code == ERR) {
+				nodelay(stdscr, FALSE);
+				break;
+			}
 			if (code >= 0) {
 				keys[key_index++] = code;
 				KeyBinding *binding = NULL;
@@ -1958,6 +1971,7 @@ main(int argc, char *argv[]) {
 				drawbar();
 				if (is_content_visible(sel))
 					wnoutrefresh(sel->window);
+			}
 			}
 			if (r == 1) /* no data available on pty's */
 				continue;
