@@ -59,6 +59,45 @@ compile (you will need curses headers) and install it
 or use one of the distribution provided
 [binary packages](https://repology.org/project/dvtm/packages).
 
+## Changes from upstream dvtm
+
+This fork tracks [martanne/dvtm](https://github.com/martanne/dvtm). What is
+different so far:
+
+**Fixed**
+
+  * dvtm froze completely the first time any signal woke it. The pipe it uses
+    to wake its own main loop was drained with a loop that never stops on an
+    empty pipe, so dvtm stopped responding to the keyboard and to every window.
+  * Keystrokes were lost when they arrived together — typing quickly, pasting,
+    or any key combination sent in one go. Only the first key of each batch was
+    read; the rest waited for unrelated input that might never come.
+  * A window whose program had exited stayed on screen forever on macOS and the
+    BSDs. Neither of the two ways dvtm detects this worked there: the exit
+    signal was blocked and never delivered, and a closed terminal was mistaken
+    for an ordinary empty read.
+  * 24-bit colour was not supported.
+  * The `:` separator in colour escape sequences was not understood, so
+    programs using the standard form got the wrong colours.
+  * `DSR 5`, a program asking the terminal whether it is alive, went
+    unanswered.
+
+**Improved**
+
+  * Builds and runs on macOS, using ncursesw 6.1+ rather than the 6.0 the
+    system ships.
+  * The terminfo description installs with its user-defined capabilities
+    intact, so programs inside dvtm see the 24-bit colour support.
+  * `make test` runs a test suite that drives the real binary on a terminal and
+    checks what it paints. See below.
+  * Installs to `~/.local` by default, so no administrator rights are needed.
+  * Dependencies are discovered by asking the libraries, not by naming
+    operating systems in the build.
+
+**Known**
+
+  * `OSC 11`, a program asking for the background colour, is still unanswered.
+
 ## Building and testing
 
 Dependencies:
