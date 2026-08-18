@@ -991,9 +991,15 @@ setup(void) {
 	}
 	resize_screen();
 	if (pipe(sigpipe) == 0) {
-		for (int i = 0; i < 2; i++)
+		for (int i = 0; i < 2; i++) {
 			fcntl(sigpipe[i], F_SETFD, FD_CLOEXEC);
-		fcntl(sigpipe[1], F_SETFL, O_NONBLOCK);
+			/* Both ends, not just the writer. The main loop drains this pipe
+			 * with `while (read(...) > 0)`, which on a blocking descriptor
+			 * does not stop when the pipe runs dry -- it waits there forever,
+			 * and dvtm stops responding to the keyboard and to every window
+			 * the moment any signal wakes it. */
+			fcntl(sigpipe[i], F_SETFL, O_NONBLOCK);
+		}
 	}
 	struct sigaction sa;
 	memset(&sa, 0, sizeof sa);
