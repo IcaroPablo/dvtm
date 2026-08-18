@@ -59,6 +59,39 @@ compile (you will need curses headers) and install it
 or use one of the distribution provided
 [binary packages](https://repology.org/project/dvtm/packages).
 
+## Building and testing
+
+Dependencies:
+
+  * `ncursesw` >= 6.1, built with `--enable-ext-colors` — `alloc_pair()` and the
+    extended pair argument of `wcolor_set()` are what 24-bit colour needs. The
+    build asks `ncursesw6-config` where it lives.
+  * `libvterm` >= 0.3, needed by the test suite.
+
+Build and install:
+
+    make && make install
+
+Run the tests:
+
+    make test
+
+`libvterm` ships no `*-config` script, so the build does not go looking for it:
+it compiles against `-lvterm` and expects the compiler to find the header. If
+your libvterm lives outside the default search path — anywhere managed by a
+package manager, typically — say so through the environment rather than editing
+the makefiles:
+
+    export VTERM_CFLAGS="-I/opt/homebrew/include"
+    export VTERM_LIBS="-L/opt/homebrew/lib -lvterm"
+
+The same applies to any other prefix; substitute your own. Keeping this in the
+environment is deliberate — it is what lets `config.mk` name no operating
+system and no package manager, so the build stays the same everywhere.
+
+`make test` needs no `make install` first: it compiles `dvtm.info` into a
+throwaway terminfo tree under `tests/` and points the spawned dvtm at it.
+
 ## Why dvtm? The philosophy behind
 
 dvtm strives to adhere to the
