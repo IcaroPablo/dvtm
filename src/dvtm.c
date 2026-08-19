@@ -694,20 +694,36 @@ static void viewprevtag(const char *args[]) {
     tagschanged();
 }
 
-static void keypress(int code) {
+/* One key on its way to the children. `is_key` says which of the two things
+ * curses handed us: a key code such as KEY_UP, or a character. Nothing in the
+ * value itself distinguishes them -- see the note above term_keychar(). */
+static void keypress(int code, bool is_key) {
+    bool escape = !is_key && code == '\033';
     int key = -1;
+    uint32_t chr = 0;
     unsigned int len = 1;
     char buf[8] = { '\033' };
 
-    if (code == '\033') {
+    if (escape) {
         /* pass characters following escape to the underlying app */
         nodelay(stdscr, TRUE);
-        for (int t; len < sizeof(buf) && (t = getch()) != ERR; len++) {
-            if (t > 255) {
-                key = t;
+        while (len < sizeof(buf)) {
+            wint_t wc;
+            int rc = get_wch(&wc);
+            if (rc == ERR)
+                break;
+            if (rc == KEY_CODE_YES) {
+                key = (int)wc;
                 break;
             }
-            buf[len] = t;
+            /* The body of an escape sequence is ASCII. Anything else is the
+             * next thing the user typed, and it has to be forwarded whole:
+             * truncating it into buf is how a character gets cut in half. */
+            if (wc >= 0x80) {
+                chr = (uint32_t)wc;
+                break;
+            }
+            buf[len++] = (char)wc;
         }
         nodelay(stdscr, FALSE);
     }
@@ -716,12 +732,16 @@ static void keypress(int code) {
         c = nextvisible(c->next)) {
         if (is_content_visible(c)) {
             c->urgent = false;
-            if (code == '\033')
+            if (escape)
                 term_write(c->term, buf, len);
-            else
+            else if (is_key)
                 term_keypress(c->term, code);
+            else
+                term_keychar(c->term, (uint32_t)code);
             if (key != -1)
                 term_keypress(c->term, key);
+            if (chr)
+                term_keychar(c->term, chr);
         }
         if (!runinall)
             break;
@@ -1681,27 +1701,44 @@ int main(int argc, char *argv[]) {
         }
 
         if (FD_ISSET(STDIN_FILENO, &rd)) {
-            int code;
             /* Drain what ncurses already holds. select() reports the
-             * descriptor, but getch() reads ahead into ncurses' own buffer:
+             * descriptor, but get_wch() reads ahead into ncurses' own buffer:
              * after the first key the descriptor is quiet again, so reading
              * one key per wakeup strands the rest of a burst until unrelated
              * input happens to arrive. Typing quickly or pasting lost keys.
-             * nodelay is re-armed each pass because keypress() clears it. */
+             * nodelay is re-armed each pass because keypress() clears it.
+             *
+             * get_wch() and not getch(): getch() reports a character one byte
+             * at a time, and a byte of UTF-8 is not a character. Everything
+             * above U+007F then reached the child re-encoded -- 'á' as 'Ã¡'.
+             * get_wch() decodes in ncurses, where the locale is already
+             * known, and says in its return value which of the two kinds of
+             * thing it read. */
             for (;;) {
+                wint_t wch;
+                int rc;
+                bool is_key;
+
                 nodelay(stdscr, TRUE);
-                code = getch();
-                if (code == ERR) {
+                rc = get_wch(&wch);
+                if (rc == ERR) {
                     nodelay(stdscr, FALSE);
                     break;
                 }
-                if (code >= 0) {
-                    keys[key_index++] = code;
+                is_key = rc == KEY_CODE_YES;
+
+                if (is_key && wch == KEY_MOUSE) {
+                    key_index = 0;
+                    handle_mouse();
+                } else if (is_key || wch < KEY_MIN) {
+                    /* Only a key code, or a character below the range curses
+                     * reserves for key codes, is allowed to match a binding.
+                     * The two overlap by value, and without this a letter
+                     * whose code point happens to equal KEY_F(4) would run a
+                     * window command instead of being typed. */
                     KeyBinding *binding = NULL;
-                    if (code == KEY_MOUSE) {
-                        key_index = 0;
-                        handle_mouse();
-                    } else if ((binding = keybinding(keys, key_index))) {
+                    keys[key_index++] = (unsigned int)wch;
+                    if ((binding = keybinding(keys, key_index))) {
                         unsigned int key_length = MAX_KEYS;
                         while (key_length > 1 && !binding->keys[key_length - 1])
                             key_length--;
@@ -1713,12 +1750,16 @@ int main(int argc, char *argv[]) {
                     } else {
                         key_index = 0;
                         memset(keys, 0, sizeof(keys));
-                        keypress(code);
+                        keypress((int)wch, is_key);
                     }
-                    drawbar();
-                    if (is_content_visible(sel))
-                        wnoutrefresh(sel->window);
+                } else {
+                    key_index = 0;
+                    memset(keys, 0, sizeof(keys));
+                    keypress((int)wch, false);
                 }
+                drawbar();
+                if (is_content_visible(sel))
+                    wnoutrefresh(sel->window);
             }
             if (r == 1) /* no data available on pty's */
                 continue;

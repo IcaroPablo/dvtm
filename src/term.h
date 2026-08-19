@@ -88,7 +88,11 @@ pid_t term_forkpty(Term *, const char *p, const char *argv[], const char *cwd,
 
 int term_process(Term *);
 ssize_t term_write(Term *, const char *buf, size_t len);
+/* A curses key code (KEY_UP, KEY_F(3)...) and one character the user typed.
+ * Two entry points because a key code and a code point overlap numerically;
+ * see the note above term_keychar(). */
 void term_keypress(Term *, int keycode);
+void term_keychar(Term *, uint32_t codepoint);
 void term_mouse(Term *, int x, int y, mmask_t mask);
 
 void term_scroll(Term *, int rows);

@@ -647,6 +647,52 @@ static void t_backspace(void) {
     reap();
 }
 
+/* Typing a non-ASCII character must reach the child as the bytes that were
+ * typed.
+ *
+ * This is a keyboard test, not a drawing one, and the two failed independently:
+ * dvtm painted 'á' correctly all along while delivering it to the child as
+ * 'Ã¡'. The read side handed the main loop one byte at a time and the byte was
+ * then passed on as if it were a code point, so every character above U+007F
+ * was re-encoded and arrived at twice its length. Nothing on screen showed it;
+ * only the child could tell. */
+static void t_utf8_input(void) {
+    struct {
+        const char *name, *keys, *want;
+    } cases[] = {
+        /* U+00E1, two bytes: the shortest thing the old path got wrong. */
+        { "a two-byte character", "\xc3\xa1", "ECHO=c3a1" },
+        /* U+20AC, three bytes: proves the fix is not a two-byte special case. */
+        { "a three-byte character", "\xe2\x82\xac", "ECHO=e282ac" },
+        /* Still ASCII, and still one byte. A wide read that turned every key
+         * into something longer would pass the two above and break every
+         * program inside dvtm. */
+        { "plain ASCII", "k", "ECHO=6b" },
+    };
+    char why[200];
+
+    for (unsigned i = 0; i < sizeof cases / sizeof *cases; i++) {
+        char name[80];
+        snprintf(
+            name, sizeof name, "typing reaches the child: %s", cases[i].name);
+
+        start("tests/probe echo", NULL, NULL);
+        if (!wait_screen("ECHOREADY", 5000)) {
+            fail(name, "the probe never reported it was reading");
+            reap();
+            continue;
+        }
+        tty_write(cases[i].keys, strlen(cases[i].keys));
+
+        snprintf(why, sizeof why,
+            "expected %s on screen; dvtm delivered different bytes to the "
+            "child than were typed",
+            cases[i].want);
+        check(name, wait_screen(cases[i].want, 5000), why);
+        reap();
+    }
+}
+
 /* Which windows dvtm currently shows, as a bitmask of its own window ids.
  *
  * The ids are the right observable for "is the window gone". Marker text is
@@ -1142,6 +1188,7 @@ int main(int argc, char *argv[]) {
     t_manycolors();
     t_palette_terminal();
     t_backspace();
+    t_utf8_input();
     t_child_env();
     t_plain_text_default_color();
     t_cursor_follows_child();

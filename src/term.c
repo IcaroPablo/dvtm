@@ -481,13 +481,25 @@ void term_keypress(Term *t, int keycode) {
         return;
     }
 
-    if ((key = vterm_key_of(keycode)) != VTERM_KEY_NONE) {
-        vterm_keyboard_key(t->vt, key, VTERM_MOD_NONE);
-    } else if (keycode >= 0 && keycode <= UCHAR_MAX) {
-        vterm_keyboard_unichar(t->vt, (uint32_t)keycode, VTERM_MOD_NONE);
-    } else {
+    if ((key = vterm_key_of(keycode)) == VTERM_KEY_NONE)
         return;
-    }
+    vterm_keyboard_key(t->vt, key, VTERM_MOD_NONE);
+    flush_output(t);
+}
+
+/* One character the user typed, as a code point rather than as a byte.
+ *
+ * Kept apart from term_keypress() because the two cannot be told apart by
+ * value: curses key codes start at KEY_MIN, and so do plenty of perfectly
+ * ordinary letters. Only the caller knows which of the two it read, so only
+ * the caller can choose the entry point.
+ *
+ * The code point, and not the byte, is the whole point. libvterm encodes what
+ * it is given; handing it a byte of UTF-8 makes it encode that byte as a
+ * character in its own right, and 'á' arrives at the child as 'Ã¡'. */
+void term_keychar(Term *t, uint32_t codepoint) {
+    term_noscroll(t);
+    vterm_keyboard_unichar(t->vt, codepoint, VTERM_MOD_NONE);
     flush_output(t);
 }
 

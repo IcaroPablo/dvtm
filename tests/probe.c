@@ -129,6 +129,38 @@ int main(int argc, char *argv[]) {
         printf(
             "COLORTERM=[%s]\n", getenv("COLORTERM") ? getenv("COLORTERM") : "");
         fflush(stdout);
+    } else if (!strcmp(what, "echo")) {
+        /* The exact bytes dvtm's keyboard path delivered, as hex.
+         *
+         * Hex rather than the characters themselves, because the thing under
+         * test is the encoding. A window showing 'á' proves only that dvtm
+         * painted something plausible; c3a1 proves the child was handed the
+         * two bytes that were typed and not four others. */
+        struct termios old, raw;
+        char buf[64], hex[3 * sizeof buf];
+        size_t o = 0;
+        int n;
+
+        if (tcgetattr(STDIN_FILENO, &old) == 0) {
+            raw = old;
+            raw.c_lflag &= (tcflag_t) ~(ICANON | ECHO);
+            raw.c_cc[VMIN] = 0;
+            raw.c_cc[VTIME] = 0;
+            tcsetattr(STDIN_FILENO, TCSANOW, &raw);
+        }
+        /* Announce readiness before blocking: the harness has no other way to
+         * know the raw mode is in place, and keys sent before it are echoed by
+         * the line discipline instead of reaching this read. */
+        printf("ECHOREADY\n");
+        fflush(stdout);
+
+        n = reply(buf, sizeof buf, 10000);
+        for (int i = 0; i < n && o + 3 < sizeof hex; i++)
+            o += (size_t)snprintf(
+                hex + o, sizeof hex - o, "%02x", (unsigned char)buf[i]);
+        hex[o] = '\0';
+        printf("ECHO=%s\n", hex);
+        fflush(stdout);
     } else if (!strcmp(what, "plain")) {
         /* Deliberately no SGR at all: these cells must come out in the
          * terminal's default colours, not in some colour of dvtm's choosing. */
