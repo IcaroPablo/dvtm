@@ -40,8 +40,9 @@ VTERM_CFLAGS ?= $(if ${VTERM_PREFIX},-I${VTERM_PREFIX}/include)
 VTERM_LIBS ?= $(if ${VTERM_PREFIX},-L${VTERM_PREFIX}/lib )-lvterm
 
 INCS = -I. ${NCURSES_CFLAGS} ${VTERM_CFLAGS}
-# -lutil is gone with forkpty(3): it was the only thing here that needed it.
-LIBS = -lc ${NCURSES_LIBS} ${VTERM_LIBS}
+# -lutil is gone with forkpty(3): it was the only thing here that needed it,
+# and -lc with it -- every compiler links the C library on its own.
+LIBS = ${NCURSES_LIBS} ${VTERM_LIBS}
 # _DARWIN_C_SOURCE brings back SIGWINCH, which _POSIX_C_SOURCE hides on macOS;
 # every other system just ignores the macro.
 CPPFLAGS = -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -D_XOPEN_SOURCE_EXTENDED -D_DARWIN_C_SOURCE
