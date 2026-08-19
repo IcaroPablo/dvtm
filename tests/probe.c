@@ -113,6 +113,12 @@ int main(int argc, char *argv[]) {
         }
         printf("\nMANYDONE\n");
         fflush(stdout);
+    } else if (!strcmp(what, "faint")) {
+        /* SGR 2. Not a colour: a program asking for the same colour, dimmer.
+         * Emitted on its own line so the check can tell "painted without the
+         * attribute" from "not painted at all". */
+        printf("\033[2mFAINT\033[0m\n");
+        fflush(stdout);
     } else if (!strcmp(what, "backspace")) {
         /* Canary for terminfo regressions. The colors#0x1000000 breakage showed
          * up first as a prompt losing its backspaces, because the oversized

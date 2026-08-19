@@ -529,6 +529,35 @@ static void t_truecolor(void) {
     reap();
 }
 
+static void t_faint(void) {
+    start("tests/probe faint", NULL, NULL);
+    wait_screen("FAINT", 5000);
+    settle(300);
+
+    check("faint: the text itself reaches the terminal", screen_has("FAINT"),
+        "the probe's line never appeared");
+
+    /* Known limitation, not an oversight. libvterm 0.3.3 has no faint bit:
+     * VTermScreenCellAttrs carries bold, underline, italic, blink, reverse,
+     * conceal, strike, font, dwl, dhl, small and baseline, and nothing for
+     * SGR 2. The cell it returns for faint text is byte for byte the cell it
+     * returns for unstyled text, so there is nothing for dvtm to map onto
+     * A_DIM. vt.c did not carry it either; this is a gap, not a regression.
+     *
+     * The assertion is kept below, commented, so that re-enabling it is a
+     * one-line change the day libvterm models faint. Uncomment it and drop
+     * the skip() call. */
+    /*
+    check("faint: SGR 2 survives to the outer terminal",
+          wait_bytes("\033[2m", 2000),
+          "the faint text was painted at full brightness");
+    */
+    skip("faint: SGR 2 survives to the outer terminal",
+        "libvterm 0.3.3 has no faint bit in VTermScreenCellAttrs, so dvtm "
+        "never sees SGR 2; see README.md under Known.");
+    reap();
+}
+
 /* Count distinct 24-bit colours dvtm put on the wire.
  *
  * Counted from the bytes, not from the cell grid, for the same reason the other
@@ -1185,6 +1214,7 @@ int main(int argc, char *argv[]) {
     t_startup();
     t_dsr();
     t_truecolor();
+    t_faint();
     t_manycolors();
     t_palette_terminal();
     t_backspace();

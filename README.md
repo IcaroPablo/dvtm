@@ -108,12 +108,34 @@ uses.
     colours — so it has to be implemented here if it is wanted.
   * Colours written as `38:2::r:g:b` are read wrongly. That is the
     standards-conformant spelling, with an empty colourspace field, and
-    libvterm 0.3.3 drops the empty field and shifts the values. Programs that
-    ask terminfo how to set a colour are unaffected, because the terminfo
-    installed here uses `38;2;r;g;b`; only programs that hardcode the other
-    spelling see wrong colours. `make test` reports this as a skipped check on
-    every run. There is nothing to upgrade to: 0.3.3 is the newest release that
-    exists, and Debian, Arch, Fedora and Guix all ship it.
+    libvterm 0.3.3 drops the empty field and shifts the values. It is that
+    field alone: of the three spellings a program can choose, only the middle
+    one breaks.
+
+        38;2;10;200;30     -> rgb( 10,200, 30)
+        38:2::10:200:30    -> rgb(255, 10,200)
+        38:2:10:200:30     -> rgb( 10,200, 30)
+
+    Programs that ask terminfo how to set a colour are unaffected, because the
+    terminfo installed here uses `38;2;r;g;b`; only programs that hardcode the
+    full colon spelling see wrong colours. `make test` reports this as a
+    skipped check on every run. There is nothing to upgrade to: 0.3.3 is the
+    newest release that exists, and Debian, Arch, Fedora and Guix all ship it.
+  * **Faint text is painted at full brightness.** `SGR 2`, which programs use
+    for text meant to sit back from the rest, is lost. libvterm 0.3.3 has no
+    way to carry it: `VTermScreenCellAttrs` has bits for bold, underline,
+    italic, blink, reverse, conceal, strike and several more, and none for
+    faint. The cell libvterm hands back for `ESC[2m` is byte for byte the cell
+    it hands back for unstyled text, so dvtm never learns the distinction and
+    has nothing to pass on to `A_DIM`. It is visible wherever a program dims
+    something rather than colouring it: secondary lines in a banner, the
+    greyed-out suggestion under a prompt. `make test` reports this as a
+    skipped check on every run. There is nowhere to move to: the attribute is
+    absent from libvterm's own tree and from the fork neovim keeps, which is
+    the most actively maintained one there is. Recovering it means either
+    teaching some libvterm to model faint, or dvtm parsing SGR alongside
+    libvterm and keeping its own grid — which is the emulator this fork
+    deleted, back again.
   * **`Mod-C` only works on Linux, and says nothing anywhere else.** It is meant
     to open a window in the working directory of the focused one, and copy mode
     is meant to start the editor there too. Both ask `/proc/<pid>/cwd`, which
