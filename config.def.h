@@ -59,12 +59,12 @@ static Color colors[] = {
 
 const char tags[][8] = { "1", "2", "3", "4", "5" };
 
-#include "tile.c"
-#include "grid.c"
-#include "bstack.c"
-#include "fullscreen.c"
-/* Also in the source tree, and not enabled here: vstack.c (vstack), tstack.c
- * (tstack) and fibonacci.c (spiral, dwindle). Include the file and add a line
+#include "tile.h"
+#include "grid.h"
+#include "bstack.h"
+#include "fullscreen.h"
+/* Also in the source tree, and not enabled here: vstack.h (vstack), tstack.h
+ * (tstack) and fibonacci.h (spiral, dwindle). Include the file and add a line
  * to layouts[] to use one. */
 
 /* by default the first layout entry is used */

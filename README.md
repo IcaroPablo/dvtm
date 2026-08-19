@@ -102,6 +102,12 @@ the same emulator neovim uses, in a third of the code.
   * `make test` runs a suite that drives the real binary on a terminal and
     checks what it paints, including cases for every bug above.
   * Warnings are on by default and the build is clean.
+  * Every file parses on its own. `config.h` and the layouts used to be
+    fragments that only made sense pasted into `dvtm.c`; they now include
+    `dvtm.h`, which carries the declarations they need. The layouts are named
+    `.h` to match what they are — files that are only ever `#include`d. **A
+    custom `config.h` must change `#include "tile.c"` to `#include "tile.h"`,
+    and add `#include "dvtm.h"` at the top.**
   * The manual page matches the program again. `Mod-E` and `DVTM_PAGER` were
     undocumented, `Mod-/` was described as opening an editor when it opens a
     pager, and the entry for `DVTM_EDITOR` broke off mid-sentence.
@@ -128,14 +134,9 @@ the same emulator neovim uses, in a third of the code.
     installed here uses `38;2;r;g;b`; only programs that hardcode the other
     spelling see wrong colours. `make test` reports this as a skipped check on
     every run.
-  * `config.h` and the layout files (`tile.c`, `grid.c`, …) are `#include`d
-    into `dvtm.c` and use types it declares above the include site, so opened
-    on their own they do not compile. Harmless to the build; confusing to read
-    and to any editor.
 
 **Still to do**
 
-  * Make each file compile on its own, which is the `config.h` problem above.
   * Build on a Unix outside the three that get tested here, to check that
     "portable to any Unix with the dependencies" is true rather than claimed.
 
