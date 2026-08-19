@@ -15,20 +15,94 @@
 int32_t default_fg = -1, default_bg = -1;
 bool has_default_colors;
 
+/* Whether the host terminal takes a colour number as packed rgb. ncurses does
+ * that only for a direct-colour terminfo (the RGB capability, COLORS of
+ * 0x1000000); anywhere else a colour number is an index into a palette, and a
+ * packed rgb value is far past the end of it. */
+static bool direct_color;
+
 /* ── colour ───────────────────────────────────────────────────────────────── */
+
+static const int cube[6] = { 0, 95, 135, 175, 215, 255 };
+
+/* rgb for the 16 ANSI entries as an unthemed terminal draws them. A themed one
+ * differs, and that is fine: this only has to pick a plausible nearest, not
+ * reproduce somebody's palette. */
+static const int32_t ansi[16] = {
+	0x000000, 0xcd0000, 0x00cd00, 0xcdcd00, 0x0000ee, 0xcd00cd, 0x00cdcd, 0xe5e5e5,
+	0x7f7f7f, 0xff0000, 0x00ff00, 0xffff00, 0x5c5cff, 0xff00ff, 0x00ffff, 0xffffff,
+};
+
+static long rgb_dist(int r, int g, int b, int32_t c)
+{
+	long dr = r - ((c >> 16) & 0xff), dg = g - ((c >> 8) & 0xff), db = b - (c & 0xff);
+	return dr * dr + dg * dg + db * db;
+}
+
+/* The nearest of the colours this terminal actually has, when it has 16 or
+ * fewer. Without this an approximation lands somewhere in 16-255, which is
+ * past the end of the palette, and every cell falls back to the default. */
+static int32_t nearest_ansi(int r, int g, int b)
+{
+	int limit = COLORS < 16 ? COLORS : 16;
+	int best = 0, i;
+
+	if (limit <= 0)
+		return -1;
+	for (i = 1; i < limit; i++)
+		if (rgb_dist(r, g, b, ansi[i]) < rgb_dist(r, g, b, ansi[best]))
+			best = i;
+	return best;
+}
+
+/* The nearest 256-palette entry to an rgb triple: the best of the 6x6x6 cube
+ * and the 24-step grey ramp. Used when the terminal cannot be told an rgb
+ * value directly -- an approximation is the whole point, and it is still far
+ * better than the default colour, which is what an out-of-range number gets. */
+static int32_t nearest_index(int r, int g, int b)
+{
+	int ci[3], best_cube = 0, grey_step, i, c;
+	const int v[3] = { r, g, b };
+	long dist_cube = 0, dist_grey = 0;
+
+	for (c = 0; c < 3; c++) {
+		int best = 0;
+		for (i = 1; i < 6; i++)
+			if (abs(cube[i] - v[c]) < abs(cube[best] - v[c]))
+				best = i;
+		ci[c] = best;
+		dist_cube += (long)(cube[best] - v[c]) * (cube[best] - v[c]);
+	}
+	best_cube = 16 + 36 * ci[0] + 6 * ci[1] + ci[2];
+
+	grey_step = (r * 299 + g * 587 + b * 114) / 1000;
+	grey_step = (grey_step - 8 + 5) / 10;
+	if (grey_step < 0)
+		grey_step = 0;
+	if (grey_step > 23)
+		grey_step = 23;
+	for (c = 0; c < 3; c++) {
+		int gv = 8 + grey_step * 10;
+		dist_grey += (long)(gv - v[c]) * (gv - v[c]);
+	}
+
+	return dist_grey < dist_cube ? 232 + grey_step : best_cube;
+}
+
+/* An rgb triple as a colour number this terminal can be given. */
+static int32_t nearest_color(int r, int g, int b)
+{
+	return COLORS >= 256 ? nearest_index(r, g, b) : nearest_ansi(r, g, b);
+}
 
 /* The 256-colour palette as rgb. Kept identical to what vt.c produced, so a
  * program's colours do not shift underneath the user when the engine changes. */
-static int32_t color_index(int i)
+static int32_t index_rgb(int i)
 {
-	static const int32_t bright[8] = { 0x7f7f7f, 0xff0000, 0x00ff00, 0xffff00,
-	                                   0x5c5cff, 0xff00ff, 0x00ffff, 0xffffff };
-	static const int cube[6] = { 0, 95, 135, 175, 215, 255 };
-
 	if (i < 8)
-		return i;
+		return ansi[i];
 	if (i < 16)
-		return bright[i - 8];
+		return ansi[i];
 	if (i < 232) {
 		i -= 16;
 		return RGB(cube[i / 36], cube[(i / 6) % 6], cube[i % 6]);
@@ -40,6 +114,22 @@ static int32_t color_index(int i)
 	return -1;
 }
 
+/* A palette entry as a colour number for this terminal. A direct-colour
+ * terminal wants the rgb; anything else wants an index, and one it actually
+ * has -- asking a 16-colour terminal for entry 196 gets the default colour. */
+static int32_t color_index(int i)
+{
+	int32_t c;
+
+	if (direct_color)
+		return i < 8 ? i : index_rgb(i);
+	if (i < COLORS)
+		return i;
+	if ((c = index_rgb(i)) < 0)
+		return -1;
+	return nearest_color((c >> 16) & 0xff, (c >> 8) & 0xff, c & 0xff);
+}
+
 /* A libvterm colour as an ncurses colour number. With a direct-colour terminal
  * ncurses treats the number as packed rgb, which is what RGB() produces. */
 int32_t color_of(const VTermColor *c, bool is_fg)
@@ -49,7 +139,8 @@ int32_t color_of(const VTermColor *c, bool is_fg)
 	if (VTERM_COLOR_IS_INDEXED(c))
 		return color_index(c->indexed.idx);
 	if (VTERM_COLOR_IS_RGB(c))
-		return RGB(c->rgb.red, c->rgb.green, c->rgb.blue);
+		return direct_color ? RGB(c->rgb.red, c->rgb.green, c->rgb.blue)
+		                    : nearest_color(c->rgb.red, c->rgb.green, c->rgb.blue);
 	return is_fg ? default_fg : default_bg;
 }
 
@@ -84,6 +175,7 @@ void ui_init_colors(void)
 	 * untouched, turning a -1 into 65535 and every default-coloured cell into
 	 * an arbitrary colour. And if pair_content fails outright, the locals must
 	 * already hold something sane rather than stack garbage. */
+	direct_color = COLORS >= (1 << 24);
 	pair_content(0, &fg, &bg);
 	default_fg = fg == -1 ? COLOR_WHITE : fg;
 	default_bg = bg == -1 ? COLOR_BLACK : bg;

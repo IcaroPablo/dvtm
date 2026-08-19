@@ -87,6 +87,12 @@ the same emulator neovim uses, in a third of the code.
   * `make install` could leave a binary that was killed the instant it ran, with
     no output and no error, because it overwrote executables in place.
   * 24-bit colour was not supported.
+  * All colour was lost on any terminal without direct colour — which is most
+    of them. dvtm sent every colour as a 24-bit value whatever the terminal
+    said it could take, the values were rejected as out of range, and each cell
+    was painted in the default colour: an editor inside dvtm showed no syntax
+    highlighting at all. Colours are now folded to what the terminal actually
+    has, and the suite checks four palette sizes instead of one.
   * `DSR 5`, a program asking whether the terminal is alive, went unanswered.
   * Programs inside dvtm were run with no `TERM` set at one point during the
     port; they now always get a working terminfo entry.

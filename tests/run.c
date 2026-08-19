@@ -85,6 +85,10 @@ static const char *findmem(const char *hay, size_t hn, const char *nee, size_t n
 	return NULL;
 }
 
+/* The TERM dvtm itself is started with. Not a constant, because dvtm has to
+ * work on a terminal that has no direct colour too. */
+static const char *outer_term = "xterm-direct";
+
 /* ── the pty ──────────────────────────────────────────────────────────────── */
 
 /* POSIX only: forkpty(3) is not POSIX and is exactly why dvtm carries
@@ -132,9 +136,10 @@ static void spawn_dvtm(char *const argv[])
 		if (sfd > 2)
 			close(sfd);
 		close(mfd);
-		/* A direct-colour TERM, so truecolour is actually exercised rather
-		 * than quietly downgraded to the 256 palette. */
-		setenv("TERM", "xterm-direct", 1);
+		/* Direct colour by default, so truecolour is actually exercised
+		 * rather than quietly downgraded to the 256 palette. One case
+		 * overrides it: see t_palette_terminal. */
+		setenv("TERM", outer_term, 1);
 		setenv("TERMINFO_DIRS", tinfo, 1);
 		unsetenv("ESCDELAY");
 		execv(argv[0], argv);
@@ -534,6 +539,63 @@ static void t_manycolors(void)
 	reap();
 }
 
+/* dvtm turns every colour into packed rgb and hands it to alloc_pair(). That
+ * only works where ncurses reads a colour number as rgb -- a direct-colour
+ * terminfo. On a 256-colour terminal the number is past the end of the
+ * palette, allocation fails, and every cell paints in the default colour: an
+ * editor inside dvtm loses all its syntax highlighting. Every other case here
+ * runs on xterm-direct, which is why this one exists. */
+static void t_palette_terminal(void)
+{
+	bool got;
+
+	outer_term = "xterm-256color";
+	start("tests/probe truecolor", NULL, NULL);
+	wait_screen("SEMI", 5000);
+	settle(600);
+	/* The probe asks for rgb(10,200,30). The nearest entry in the 6x6x6 cube
+	 * is (0,215,0), which is index 40; the grey ramp is much further away.
+	 * A specific number, so this fails if the approximation changes rather
+	 * than only if colour disappears. */
+	got = wait_bytes("38;5;40", 10) || wait_bytes("38:5:40", 10);
+	check("colour survives a terminal without direct colour",
+	      got,
+	      "rgb(10,200,30) did not come out as palette index 40: either the "
+	      "approximation moved, or dvtm painted in the default pair, which "
+	      "is what a failed alloc_pair() looks like");
+	reap();
+
+	/* And again with sixteen, and with eight. An approximation that lands in
+	 * 16-255 is past the end of both and fails the same way. The probe's
+	 * palette 196 is rgb(255,0,0), and the two sizes must answer it
+	 * differently: with sixteen entries the exact bright red is available
+	 * (ESC[91m), with eight only the dim one (ESC[31m). Asserting the two
+	 * apart is what makes this a test of the fold rather than of colour
+	 * merely being present. */
+	outer_term = "xterm-16color";
+	start("tests/probe truecolor", NULL, NULL);
+	wait_screen("PAL256", 5000);
+	settle(600);
+	check("sixteen-colour terminal gets the bright ANSI entry",
+	      wait_bytes("\033[91m", 10),
+	      "palette 196 did not come out as bright red: the approximation "
+	      "landed outside the palette this terminal has");
+	reap();
+
+	outer_term = "xterm";
+	start("tests/probe truecolor", NULL, NULL);
+	wait_screen("PAL256", 5000);
+	settle(600);
+	check("eight-colour terminal gets the plain ANSI entry",
+	      wait_bytes("\033[31m", 10) && !wait_bytes("\033[91m", 10),
+	      "palette 196 did not come out as plain red: eight colours is the "
+	      "smallest palette dvtm has to fold into, and nothing below 16 is "
+	      "reachable if this fails");
+	reap();
+
+	outer_term = "xterm-direct";
+}
+
 static void t_backspace(void)
 {
 	start("tests/probe backspace", NULL, NULL);
@@ -815,6 +877,7 @@ int main(int argc, char *argv[])
 	t_dsr();
 	t_truecolor();
 	t_manycolors();
+	t_palette_terminal();
 	t_backspace();
 	t_child_env();
 	t_plain_text_default_color();
