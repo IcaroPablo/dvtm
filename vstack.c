@@ -1,3 +1,5 @@
+#include "dvtm.h"
+
 /* A vertical stack layout, all windows have the full screen width. */
 static void vstack(void)
 {

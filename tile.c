@@ -1,3 +1,5 @@
+#include "dvtm.h"
+
 static void tile(void)
 {
 	unsigned int i, n, nx, ny, nw, nh, m, mw, mh, th;

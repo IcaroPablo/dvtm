@@ -1,3 +1,5 @@
+#include "dvtm.h"
+
 static void fibonacci(int s)
 {
 	unsigned int nx, ny, nw, nnw, nh, nnh, i, n, mod;

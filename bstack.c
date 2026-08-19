@@ -1,3 +1,5 @@
+#include "dvtm.h"
+
 static void bstack(void)
 {
 	unsigned int i, n, nx, ny, nw, nh, m, mw, mh, tw;

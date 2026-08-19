@@ -1,3 +1,5 @@
+#include "dvtm.h"
+
 static void grid(void)
 {
 	unsigned int i, n, nx, ny, nw, nh, aw, ah, cols, rows;

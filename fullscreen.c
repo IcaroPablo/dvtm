@@ -1,3 +1,5 @@
+#include "dvtm.h"
+
 static void fullscreen(void)
 {
 	for (Client *c = nextvisible(clients); c; c = nextvisible(c->next))

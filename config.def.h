@@ -1,3 +1,5 @@
+#include "dvtm.h"
+
 /* valid curses attributes are listed below they can be ORed
  *
  * A_NORMAL        Normal display (no highlight)
