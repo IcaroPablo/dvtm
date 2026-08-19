@@ -20,7 +20,12 @@ NCURSES_CONFIG ?= $(firstword \
 		/usr/local/opt/ncurses/bin/ncursesw6-config \
 		/opt/local/bin/ncursesw6-config) \
 	false)
-NCURSES_CFLAGS ?= $(shell ${NCURSES_CONFIG} --cflags 2>/dev/null)
+# Drop the -D_XOPEN_SOURCE ncurses asks for: this build sets it to 700 below,
+# which is higher than any *-config emits, and having both on the command line
+# is a redefinition warning on every translation unit -- Debian's ncurses says
+# 600, and the build is meant to be warning-free.
+NCURSES_CFLAGS ?= $(filter-out -D_XOPEN_SOURCE=%,\
+	$(shell ${NCURSES_CONFIG} --cflags 2>/dev/null))
 NCURSES_LIBS ?= $(shell ${NCURSES_CONFIG} --libs 2>/dev/null || echo -lncursesw)
 
 # libvterm ships no *-config script, only a pkg-config file, and pkg-config is
