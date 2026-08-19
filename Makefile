@@ -1,3 +1,6 @@
+# GNU make. config.mk searches the file system for ncurses and libvterm, and
+# that needs $(shell), $(wildcard) and $(firstword) -- GNU extensions. On a
+# system whose `make` is the BSD one, build with `gmake`.
 include config.mk
 
 SRC = dvtm.c term.c ui.c

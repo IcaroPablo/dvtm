@@ -52,9 +52,9 @@ programs.
 ## Download
 
 Either Download the latest [source tarball](https://github.com/martanne/dvtm/releases),
-compile (you will need curses headers) and install it
+compile and install it
 
-    $EDITOR config.mk && $EDITOR config.def.h && make && sudo make install
+    $EDITOR config.mk && $EDITOR config.def.h && make && make install
 
 or use one of the distribution provided
 [binary packages](https://repology.org/project/dvtm/packages).
@@ -127,6 +127,14 @@ the same emulator neovim uses, in a third of the code.
     as Homebrew does. Before, it quietly fell back to the ncurses shipped in
     macOS and stopped at `alloc_pair`.
   * Installs to `~/.local` by default, so no administrator rights are needed.
+  * `make CFLAGS=...` no longer breaks the build. The build's own flags shared
+    that variable, so setting it — which every ports tree and package build
+    does — deleted the include paths with everything else, and the compile
+    stopped at `'vterm.h' file not found`.
+  * `make test` no longer depends on what the developer has installed. It used
+    to run whichever `dvtm-editor` was on `PATH` rather than the one just
+    built, and to assert on a status line that only some editors print; on a
+    machine with a different `vi` two checks failed with nothing wrong in dvtm.
 
 **Known problems**
 
@@ -143,18 +151,40 @@ the same emulator neovim uses, in a third of the code.
 
 **Still to do**
 
-  * Build on a Unix outside the three that get tested here, to check that
-    "portable to any Unix with the dependencies" is true rather than claimed.
+  * Build on a BSD or an illumos descendant. It builds and passes its tests on
+    macOS and on Linux against two different libcs, and there is no operating
+    system named anywhere in the source, but "any Unix" stays a claim until
+    someone compiles it on a kernel nobody here had.
 
 ## Building and testing
 
 Dependencies:
 
+  * A C99 compiler. The source is plain C99 and compiles clean under
+    `-pedantic`, which `make debug` turns on. The flags in `config.mk` are the
+    gcc and clang spellings; a compiler that spells them differently is told so
+    from the command line, not by editing the file:
+    `make STD=-xc99 WARNINGS=`.
+  * GNU make. `config.mk` finds ncurses and libvterm by searching the file
+    system, which needs `$(shell)`, `$(wildcard)` and `$(firstword)`. Where the
+    system `make` is the BSD one, build with `gmake`.
   * `ncursesw` >= 6.1, built with `--enable-ext-colors` — `alloc_pair()` and the
     extended pair argument of `wcolor_set()` are what 24-bit colour needs. The
     build asks `ncursesw6-config` where it lives, on `PATH` first and then in
     the prefixes where a package manager parks a library it keeps off `PATH`.
-  * `libvterm` >= 0.3, needed by the test suite.
+  * `libvterm` >= 0.3. It parses everything the programs inside dvtm write.
+  * `tic`, from that same ncurses, to compile `dvtm.info` at install time.
+
+Nothing else, and nothing platform-specific: no `#ifdef` in the source names an
+operating system, and no `-l` flag is there for one libc. Any Unix providing
+those five should build it. There is deliberately no list of supported systems
+— such a list goes stale, and keeping one true is what invites back the
+conditionals this fork spent its time deleting.
+
+`CFLAGS` is yours: what you pass is appended after the build's own flags, so it
+wins on anything repeatable and cannot delete the include paths.
+
+    make CFLAGS='-O2 -march=native'
 
 Build and install:
 
