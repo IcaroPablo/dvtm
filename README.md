@@ -357,19 +357,84 @@ Other shells provide similar functionality, zsh as an example has a
 [precmd function](http://zsh.sourceforge.net/Doc/Release/Functions.html#Hook-Functions)
 which can be used to achieve the same effect.
 
-### Something is wrong with the displayed colors
+### Colours look close, but not right
 
-Make sure you have set `$TERM` correctly for example if you want to
-use 256 color profiles you probably have to append `-256color` to
-your regular terminal name. Also due to limitations of ncurses by
-default you can only use 255 color pairs simultaneously. If you
-need more than 255 different color pairs at the same time, then you
-have to rebuild ncurses with
+Programs inside dvtm look brighter or more saturated than they should, or an
+editor pane sits on a background a shade off from the shell beside it. Nothing
+is broken: dvtm is approximating, because your terminal told it to.
+
+ncurses sends 24-bit colour only when the terminal description carries the
+**`RGB`** capability. That is the flag that makes a colour number mean packed
+rgb instead of a palette slot. `Tc` is not a substitute: it is a tmux
+convention that ncurses ignores on purpose, and several terminals that really
+do 24-bit colour advertise `Tc` while keeping `colors#256`. On those, dvtm
+maps every colour to the nearest entry the palette has, which is close and
+measurably not the same:
+
+    #1d2021 -> palette 234 = #1c1c1c
+
+dvtm cannot decide this for you. It paints through curses windows, and curses
+will not carry a colour the description says the terminal cannot take.
+
+Ask your terminal what it claims:
+
+    $ infocmp -x $TERM | tr ',' '\n' | grep -E 'RGB|colors#'
+
+Ask the ncurses dvtm is linked against, not whichever binary is first on
+`PATH` — a system can have two, and they can disagree about both the database
+and the format.
+
+If you see `RGB` and a large `colors#`, there is nothing to do. If you see
+`colors#256`, look for a ready-made direct-colour description first:
+
+    $ infocmp xterm-direct >/dev/null 2>&1 && echo present
+
+`xterm-direct` ships with ncurses 6.1+ and works on its own, at the cost of
+whatever your terminal describes that xterm does not. To keep both, write a
+description that takes the colour machinery from one and everything else from
+the other. **The first `use=` wins**, so the direct one goes first:
+
+    myterm-direct|myterm with ncurses direct color,
+        use=xterm-direct,
+        use=myterm,
+
+Compile it into your own terminfo tree and point `TERM` at it:
+
+    $ tic -x -o ~/.terminfo myterm-direct.info
+    $ TERM=myterm-direct dvtm
+
+Two things go wrong quietly here:
+
+  * **`tic` must be ncurses 6.1 or newer.** Older ones cannot store
+    `colors#0x1000000`; they clamp it to 32767 and say nothing, and the result
+    paints nonsense like `ESC[38;5;8154980m`. The `tic` first on `PATH` is not
+    always the newest one installed — check with `tic -V`.
+  * **`-o` is not optional if `TERMINFO` is set.** Without it `tic` installs
+    wherever that variable points, which for some terminals is inside the
+    application bundle, where the next update deletes it.
+
+Keep the `xterm` prefix if your terminal's own name has one. It is not
+decoration: vim reads it to decide whether to enable `modifyOtherKeys`.
+
+**Point only the programs that need it at the new description.** A large
+`colors#` fits only the extended terminfo format, which arrived in ncurses 6.1,
+and an older ncurses does not read it partially — it reports the terminal as
+unknown, and the program degrades to nothing. That matters wherever one system
+carries two ncurses: on macOS everything in `/usr/bin` links the 6.0 in the
+base system, so with a direct-colour `TERM` set globally, `less` greets you
+with *terminal is not fully functional*. An alias is enough:
+
+    alias dvtm='TERM=myterm-direct dvtm'
+
+Set it globally only where a single modern ncurses serves the whole system.
+Either way a name only your machine knows will not resolve over `ssh`.
+
+Separately, ncurses allows only 255 colour pairs at once unless it was built
+with
 
     $ ./configure ... --enable-ext-colors
 
-Note that this changes the ABI and therefore sets SONAME of the
-library to 6 (i.e. you have to link against `libncursesw.so.6`).
+which dvtm requires anyway, and is what `ncursesw6-config` is asked about.
 
 ### Some characters are displayed like garbage
 
