@@ -93,6 +93,10 @@ static const char *outer_term = "xterm-direct";
 
 /* POSIX only: forkpty(3) is not POSIX and is exactly why dvtm carries
  * per-platform files today. Phase 2 lifts this into dvtm itself. */
+/* Kept so the window size can be changed after the fork: the slave is where
+ * TIOCSWINSZ works on every system, and the parent closes its copy below. */
+static char slave_name[256];
+
 static void spawn_dvtm(char *const argv[])
 {
 	struct winsize ws;
@@ -107,6 +111,7 @@ static void spawn_dvtm(char *const argv[])
 		die("unlockpt: %s", strerror(errno));
 	if (!(slave = ptsname(mfd)))
 		die("ptsname: %s", strerror(errno));
+	snprintf(slave_name, sizeof slave_name, "%s", slave);
 
 	if ((sfd = open(slave, O_RDWR)) < 0)
 		die("open %s: %s", slave, strerror(errno));
@@ -416,9 +421,42 @@ static bool wait_rgb(int r, int g, int b, int ms)
 	return wait_bytes(colon, ms) || wait_bytes(semi, 10);
 }
 
+/* Change the terminal size behind dvtm's back. Setting it on the slave makes
+ * the kernel deliver SIGWINCH to dvtm, which is the point: the redraw that
+ * follows can only happen if the main loop woke up on the signal. */
+static void resize_tty(int rows, int cols)
+{
+	struct winsize ws;
+	int fd;
+
+	memset(&ws, 0, sizeof ws);
+	ws.ws_row = rows;
+	ws.ws_col = cols;
+	if ((fd = open(slave_name, O_RDWR | O_NOCTTY)) < 0)
+		die("open %s: %s", slave_name, strerror(errno));
+	if (ioctl(fd, TIOCSWINSZ, &ws) < 0)
+		die("TIOCSWINSZ: %s", strerror(errno));
+	close(fd);
+}
+
 /* ── the cases ────────────────────────────────────────────────────────────── */
 
 static char dvtm_path[1024];
+
+/* start() with the whole argument list spelled out, for the flags that decide
+ * which descriptors the main loop watches. */
+static void start_argv(const char *args[])
+{
+	char *argv[10];
+	int n = 0;
+
+	argv[n++] = dvtm_path;
+	for (int i = 0; args[i] && n < 9; i++)
+		argv[n++] = (char *)args[i];
+	argv[n] = NULL;
+	screen_init();
+	spawn_dvtm(argv);
+}
 
 static void start(const char *w1, const char *w2, const char *w3)
 {
@@ -787,6 +825,75 @@ static void t_copymode(void)
 	reap();
 }
 
+/* The main loop registers four kinds of descriptor with select(): the keyboard,
+ * the pipe its own signal handlers poke, the command fifo and the status fifo.
+ * Nothing here covered the two fifos, which is most of that bookkeeping.
+ *
+ * Both are checked from the outside, the way a user meets them: a line written
+ * to the -s fifo has to reach the bar, and a line written to the -c fifo has to
+ * open a window. Breaking either registration fails the matching check --
+ * measured, not assumed.
+ *
+ * The resize at the end is weaker on purpose, and it is worth saying why. The
+ * self-pipe exists for a signal that arrives while signals are blocked, which
+ * is a race too narrow to provoke from here; a resize arriving at any other
+ * moment interrupts select() by itself, so dvtm repaints even with the pipe
+ * unwatched. So this checks that a resize is acted on at all, and does not
+ * pretend to cover the pipe. */
+static void t_fifos(void)
+{
+	char cmdfifo[512], statusfifo[512], cwd[256];
+	const char *args[6];
+	size_t before;
+	int fd;
+
+	if (!getcwd(cwd, sizeof cwd))
+		die("getcwd: %s", strerror(errno));
+	snprintf(cmdfifo, sizeof cmdfifo, "%s/tests/cmd.%d", cwd, (int)getpid());
+	snprintf(statusfifo, sizeof statusfifo, "%s/tests/bar.%d", cwd, (int)getpid());
+	unlink(cmdfifo);
+	unlink(statusfifo);
+
+	args[0] = "-c"; args[1] = cmdfifo;
+	args[2] = "-s"; args[3] = statusfifo;
+	args[4] = NULL;
+	start_argv(args);
+	settle(800);
+
+	if ((fd = open(statusfifo, O_WRONLY)) < 0) {
+		fail("status fifo is read", strerror(errno));
+	} else {
+		if (write(fd, "BARTEXT\n", 8) < 0)
+			fail("status fifo is read", strerror(errno));
+		close(fd);
+		check("status fifo reaches the bar", wait_screen("BARTEXT", 4000),
+		      "wrote to the -s fifo and the bar never showed it");
+	}
+
+	if ((fd = open(cmdfifo, O_WRONLY)) < 0) {
+		fail("command fifo is read", strerror(errno));
+	} else {
+		const char *line = "create tests/probe mark FIFOWIN\n";
+		if (write(fd, line, strlen(line)) < 0)
+			fail("command fifo is read", strerror(errno));
+		close(fd);
+		check("command fifo opens a window", wait_screen("FIFOWIN", 6000),
+		      "wrote `create` to the -c fifo and no window appeared");
+	}
+
+	/* Last, because it leaves the screen model at the old size. */
+	settle(300);
+	before = olen;
+	resize_tty(ROWS, COLS - 10);
+	settle(1500);
+	check("a resize is acted on", olen > before,
+	      "SIGWINCH arrived and dvtm wrote nothing back");
+
+	reap();
+	unlink(cmdfifo);
+	unlink(statusfifo);
+}
+
 /* The regression this exists for: keystrokes silently lost while signals were
  * blocked. Send the chords back to back in a single write, with no settling —
  * spacing them out is exactly what hides the bug.
@@ -908,6 +1015,7 @@ int main(int argc, char *argv[])
 	t_copymode();
 	t_kill_removes_window();
 	t_no_dropped_keys();
+	t_fifos();
 
 	printf("\n%d checks, %d failed, %d skipped\n", checks, failures, skipped);
 	if (skipped)

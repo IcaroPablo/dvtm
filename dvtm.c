@@ -1664,6 +1664,25 @@ parse_args(int argc, char *argv[]) {
 	return init;
 }
 
+/* Add one descriptor to the set select() is about to be handed, and keep nfds
+ * at the highest of them.
+ *
+ * This was written out four times, and one of the four assigned nfds where the
+ * others took the maximum. With a command fifo whose descriptor happened to be
+ * lower than the self-pipe's -- which is what `dvtm -c fifo` with no window
+ * gives you, since the fifo is opened while parsing arguments and the pipe is
+ * made afterwards in setup() -- select() was told a smaller nfds than the set
+ * contained, and the pipe that wakes this loop when a signal arrives was not
+ * watched at all. */
+static void watch(int fd, fd_set *rd, int *nfds)
+{
+	if (fd < 0)
+		return;
+	FD_SET(fd, rd);
+	if (fd > *nfds)
+		*nfds = fd;
+}
+
 int
 main(int argc, char *argv[]) {
 	unsigned int key_index = 0;
@@ -1696,22 +1715,10 @@ main(int argc, char *argv[]) {
 		}
 
 		FD_ZERO(&rd);
-		FD_SET(STDIN_FILENO, &rd);
-
-		if (sigpipe[0] != -1) {
-			FD_SET(sigpipe[0], &rd);
-			nfds = MAX(nfds, sigpipe[0]);
-		}
-
-		if (cmdfifo.fd != -1) {
-			FD_SET(cmdfifo.fd, &rd);
-			nfds = cmdfifo.fd;
-		}
-
-		if (bar.fd != -1) {
-			FD_SET(bar.fd, &rd);
-			nfds = MAX(nfds, bar.fd);
-		}
+		watch(STDIN_FILENO, &rd, &nfds);
+		watch(sigpipe[0], &rd, &nfds);
+		watch(cmdfifo.fd, &rd, &nfds);
+		watch(bar.fd, &rd, &nfds);
 
 		for (Client *c = clients; c; ) {
 			if (c->editor && c->editor_died)
@@ -1722,9 +1729,7 @@ main(int argc, char *argv[]) {
 				c = t;
 				continue;
 			}
-			int pty = c->editor ? c->editor->pty : c->app->pty;
-			FD_SET(pty, &rd);
-			nfds = MAX(nfds, pty);
+			watch(c->editor ? c->editor->pty : c->app->pty, &rd, &nfds);
 			c = c->next;
 		}
 
