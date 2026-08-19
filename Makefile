@@ -1,6 +1,6 @@
 include config.mk
 
-SRC = dvtm.c term.c
+SRC = dvtm.c term.c ui.c
 BIN = dvtm dvtm-status dvtm-editor dvtm-pager
 MANUALS = dvtm.1 dvtm-editor.1 dvtm-pager.1
 
