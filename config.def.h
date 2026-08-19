@@ -175,20 +175,14 @@ static const ColorRule colorrules[] = {
  * REPORT_MOUSE_POSITION    report mouse movement
  */
 
-#ifdef NCURSES_MOUSE_VERSION
-# define CONFIG_MOUSE /* compile in mouse support if we build against ncurses */
-#endif
-
 #define ENABLE_MOUSE true /* whether to enable mouse events by default */
 
-#ifdef CONFIG_MOUSE
 static Button buttons[] = {
 	{ BUTTON1_CLICKED,        { mouse_focus,      { NULL  } } },
 	{ BUTTON1_DOUBLE_CLICKED, { mouse_fullscreen, { "[ ]" } } },
 	{ BUTTON2_CLICKED,        { mouse_zoom,       { NULL  } } },
 	{ BUTTON3_CLICKED,        { mouse_minimize,   { NULL  } } },
 };
-#endif /* CONFIG_MOUSE */
 
 static Cmd commands[] = {
 	/* create [cmd]: create a new window, run `cmd` in the shell if specified */

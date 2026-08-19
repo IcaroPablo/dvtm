@@ -102,6 +102,12 @@ the same emulator neovim uses, in a third of the code.
   * `make test` runs a suite that drives the real binary on a terminal and
     checks what it paints, including cases for every bug above.
   * Warnings are on by default and the build is clean.
+  * ncursesw 6.1+ is simply required, so the conditionals that used to stand in
+    for other curses libraries are gone. Mouse support is always compiled in
+    and switched at runtime, with `ENABLE_MOUSE` in `config.h` or the `-M`
+    flag; the `CONFIG_MOUSE` compile-time switch no longer exists. **If you
+    have your own `config.h`, delete the `#ifdef CONFIG_MOUSE` around
+    `buttons[]`** or that array compiles away and the build fails.
   * The build finds ncurses even when the package manager keeps it off `PATH`,
     as Homebrew does. Before, it quietly fell back to the ncurses shipped in
     macOS and stopped at `alloc_pair`.
@@ -126,8 +132,6 @@ the same emulator neovim uses, in a third of the code.
 
 **Still to do**
 
-  * Remove the remaining ncurses-version conditionals; ncursesw 6.1+ is the
-    only supported curses.
   * Make each file compile on its own, which is the `config.h` problem above.
   * Build on a Unix outside the three that get tested here, to check that
     "portable to any Unix with the dependencies" is true rather than claimed.

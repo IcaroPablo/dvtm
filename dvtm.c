@@ -36,10 +36,6 @@
 #include <termios.h>
 #include "term.h"
 
-#ifndef NCURSES_REENTRANT
-# define set_escdelay(d) (ESCDELAY = (d))
-#endif
-
 typedef struct {
 	float mfact;
 	unsigned int nmaster;
@@ -95,9 +91,10 @@ typedef struct {
 } ColorRule;
 
 #define ALT(k)      ((k) + (161 - 'a'))
-#ifndef CTRL
-  #define CTRL(k)   ((k) & 0x1F)
-#endif
+/* Undefined first, not guarded: some systems' <curses.h> pulls in a CTRL of
+ * its own, and dvtm's key bindings must mean this one. */
+#undef CTRL
+#define CTRL(k)     ((k) & 0x1F)
 #define CTRL_ALT(k) ((k) + (129 - 'a'))
 
 #define MAX_ARGS 8
@@ -951,7 +948,6 @@ keypress(int code) {
 
 static void
 mouse_setup(void) {
-#ifdef CONFIG_MOUSE
 	mmask_t mask = 0;
 
 	if (mouse_events_enabled) {
@@ -960,7 +956,6 @@ mouse_setup(void) {
 			mask |= buttons[i].mask;
 	}
 	mousemask(mask, NULL);
-#endif /* CONFIG_MOUSE */
 }
 
 static bool
@@ -1673,7 +1668,6 @@ handle_cmdfifo(void) {
 
 static void
 handle_mouse(void) {
-#ifdef CONFIG_MOUSE
 	MEVENT event;
 	unsigned int i;
 	if (getmouse(&event) != OK)
@@ -1693,7 +1687,6 @@ handle_mouse(void) {
 	}
 
 	msel = NULL;
-#endif /* CONFIG_MOUSE */
 }
 
 static void

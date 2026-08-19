@@ -25,10 +25,6 @@
 
 #include <vterm.h>
 
-#ifndef NCURSES_MOUSE_VERSION
-#define mmask_t unsigned long
-#endif
-
 #define RGB(r, g, b) (((r) & 0xff) << 16 | ((g) & 0xff) << 8 | ((b) & 0xff))
 
 typedef struct Term Term;
