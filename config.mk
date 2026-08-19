@@ -49,8 +49,18 @@ CPPFLAGS = -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -D_XOPEN_SOURCE_EXTENDE
 # Warn by default. Without this the normal build passes no -W flags at all and
 # a new warning goes unseen until someone happens to run `make debug`.
 # -Wno-unused-parameter because every key binding takes an args[] it ignores.
+#
+# These are the gcc and clang spellings. A compiler that spells the standard or
+# its warnings differently is told so from the command line, not by editing
+# here:  make STD=-xc99 WARNINGS=
+STD = -std=c99
 WARNINGS = -Wall -Wextra -Wno-unused-parameter
 
-CFLAGS += -std=c99 ${INCS} -DNDEBUG ${WARNINGS} ${CPPFLAGS}
+# The flags dvtm cannot build without, with your CFLAGS last so that they win
+# on anything that can be repeated (-O, -std, -W...). They are kept apart on
+# purpose: every ports tree and package build sets CFLAGS, and while the two
+# shared one variable, a `make CFLAGS=-O2` deleted the include paths along with
+# everything else and the build stopped at 'vterm.h' file not found.
+DVTM_CFLAGS = ${STD} ${INCS} -DNDEBUG ${WARNINGS} ${CPPFLAGS} ${CFLAGS}
 
 CC ?= cc

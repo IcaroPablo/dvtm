@@ -5,8 +5,8 @@ BIN = dvtm dvtm-status dvtm-editor dvtm-pager
 MANUALS = dvtm.1 dvtm-editor.1 dvtm-pager.1
 
 VERSION = $(shell git describe --always --dirty 2>/dev/null || echo "0.15-git")
-CFLAGS += -DVERSION=\"${VERSION}\"
-DEBUG_CFLAGS = ${CFLAGS} -UNDEBUG -O0 -g -ggdb -Wall -Wextra -Wno-unused-parameter
+DVTM_CFLAGS += -DVERSION=\"${VERSION}\"
+DEBUG_CFLAGS = ${DVTM_CFLAGS} -UNDEBUG -O0 -g
 
 all: dvtm dvtm-editor
 
@@ -14,10 +14,10 @@ config.h:
 	cp config.def.h config.h
 
 dvtm: config.h config.mk *.c *.h
-	${CC} ${CFLAGS} ${SRC} ${LDFLAGS} ${LIBS} -o $@
+	${CC} ${DVTM_CFLAGS} ${SRC} ${LDFLAGS} ${LIBS} -o $@
 
 dvtm-editor: dvtm-editor.c
-	${CC} ${CFLAGS} $^ ${LDFLAGS} -o $@
+	${CC} ${DVTM_CFLAGS} $^ ${LDFLAGS} -o $@
 
 man:
 	@for m in ${MANUALS}; do \
@@ -26,16 +26,16 @@ man:
 	done
 
 debug: clean
-	@$(MAKE) CFLAGS='${DEBUG_CFLAGS}'
+	@$(MAKE) DVTM_CFLAGS='${DEBUG_CFLAGS}'
 
 test: dvtm tests/run tests/probe
 	@tests/run ./dvtm
 
 tests/run: tests/run.c
-	${CC} ${CFLAGS} ${VTERM_CFLAGS} $< ${LDFLAGS} ${VTERM_LIBS} -o $@
+	${CC} ${DVTM_CFLAGS} $< ${LDFLAGS} ${VTERM_LIBS} -o $@
 
 tests/probe: tests/probe.c
-	${CC} ${CFLAGS} $< ${LDFLAGS} -o $@
+	${CC} ${DVTM_CFLAGS} $< ${LDFLAGS} -o $@
 
 clean:
 	@echo cleaning
