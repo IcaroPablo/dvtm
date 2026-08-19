@@ -43,6 +43,15 @@ uses.
     was painted in the default colour: an editor inside dvtm showed no syntax
     highlighting at all. Colours are now folded to what the terminal actually
     has, and the suite checks four palette sizes instead of one.
+  * Everything dvtm painted itself — the tag numbers, the window borders, the
+    titles of unfocused windows — came out black on black on a direct-colour
+    terminal, and the bar and borders sat on a hard black background rather than
+    the terminal's own. All of that is `COLOR(DEFAULT)`, meaning "whatever this
+    terminal calls its default", and dvtm resolved it by reading colour pair 0
+    instead of letting ncurses carry the default through. On a direct-colour
+    terminal a colour number is an rgb value, so pair 0 reads as 0, which is
+    black. Nothing was missing from the screen; it was painted in the darkest
+    colour the terminal has.
   * `DSR 5`, a program asking whether the terminal is alive, went unanswered.
   * Programs inside dvtm were run with no `TERM` set at one point during the
     port; they now always get a working terminfo entry.

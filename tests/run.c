@@ -919,6 +919,42 @@ static void t_copymode_editor_fails(void) {
     copymode_paste("fail", false);
 }
 
+/* Everything dvtm paints itself -- the tag numbers, the window borders, the
+ * titles of unfocused windows -- is COLOR(DEFAULT) in config.h, which is -1/-1:
+ * whatever this terminal calls its default foreground and background.
+ *
+ * That has to reach the terminal as a default and not as a colour. dvtm used to
+ * resolve it here instead, reading pair 0 and using whatever number came back.
+ * On a direct-colour terminal a colour number is an rgb value, so pair 0 reads
+ * as 0, which is black -- and the unused tags and every border were painted
+ * black on black. Nothing was missing; it was all there in the terminal's
+ * darkest colour.
+ *
+ * The check is on the bytes rather than the screen model, because a screen
+ * model has no opinion about whether two colours can be told apart. */
+static void t_default_color_is_not_black(void) {
+    start("tests/probe mark DEFCOLOR", NULL, NULL);
+    if (!wait_screen("DEFCOLOR", 6000)) {
+        fail("dvtm's own colours stay the terminal's default",
+            "the window never appeared");
+        reap();
+        return;
+    }
+    settle(400);
+
+    check("unused tags are painted in the default colour, not in black",
+        findmem(obuf, olen, "\033[39m", 5) != NULL &&
+            findmem(obuf, olen, "\033[30m[2]", 8) == NULL,
+        "the tags after the first are drawn with an explicit black "
+        "foreground, which on a dark terminal is nothing at all");
+
+    check("dvtm does not force a background on its own furniture",
+        findmem(obuf, olen, "\033[40m[2]", 8) == NULL,
+        "the bar is painted on a hard black background instead of the "
+        "terminal's own");
+    reap();
+}
+
 /* The main loop registers four kinds of descriptor with select(): the keyboard,
  * the pipe its own signal handlers poke, the command fifo and the status fifo.
  * Nothing here covered the two fifos, which is most of that bookkeeping.
@@ -1115,6 +1151,7 @@ int main(int argc, char *argv[]) {
     t_copymode_editor_fails();
     t_kill_removes_window();
     t_no_dropped_keys();
+    t_default_color_is_not_black();
     t_fifos();
 
     printf("\n%d checks, %d failed, %d skipped\n", checks, failures, skipped);

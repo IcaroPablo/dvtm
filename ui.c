@@ -153,11 +153,20 @@ int32_t color_of(const VTermColor *c, bool is_fg) {
     return is_fg ? default_fg : default_bg;
 }
 
+/* -1 means "whatever this terminal calls its default", and it is passed to
+ * ncurses as -1 wherever ncurses can carry that -- which is what
+ * use_default_colors() buys, and it emits ESC[39m / ESC[49m for it.
+ *
+ * Substituting a concrete colour for -1 here instead is what painted the unused
+ * tags and the borders black on black: on a direct-colour terminal a colour
+ * number is an rgb value, so the "default" read out of pair 0 is 0, which is
+ * black, and black on a dark background is nothing at all. A concrete colour is
+ * only correct when the terminal cannot express a default. */
 int term_color_get(Term *t, int32_t fg, int32_t bg) {
-    if (fg == -1)
-        fg = (t ? t->deffg : default_fg);
-    if (bg == -1)
-        bg = (t ? t->defbg : default_bg);
+    if (fg == -1 && t)
+        fg = t->deffg;
+    if (bg == -1 && t)
+        bg = t->defbg;
 
     if (!has_default_colors) {
         if (fg == -1)
@@ -183,10 +192,22 @@ void ui_init_colors(void) {
      * an arbitrary colour. And if pair_content fails outright, the locals must
      * already hold something sane rather than stack garbage. */
     direct_color = COLORS >= (1 << 24);
-    pair_content(0, &fg, &bg);
-    default_fg = fg == -1 ? COLOR_WHITE : fg;
-    default_bg = bg == -1 ? COLOR_BLACK : bg;
+
+    /* use_default_colors() first: it is what decides whether -1 can be handed
+     * to ncurses at all, and pair 0 only answers usefully afterwards. */
     has_default_colors = (use_default_colors() == OK);
+    pair_content(0, &fg, &bg);
+    default_fg = fg;
+    default_bg = bg;
+
+    /* Only where a default cannot be expressed does a concrete colour have to
+     * be invented, and then white on black is the conventional guess. */
+    if (!has_default_colors) {
+        if (default_fg == -1)
+            default_fg = COLOR_WHITE;
+        if (default_bg == -1)
+            default_bg = COLOR_BLACK;
+    }
     term_color_get(NULL, COLOR_WHITE, COLOR_BLACK);
 }
 
