@@ -1,0 +1,33 @@
+# The house style, written down so it stops being a matter of memory.
+#
+# Braces on the same line, everywhere, and four spaces to indent -- which is
+# what the editor this is written in inserts, so what is typed and what is
+# committed are the same thing. No tab characters: a tab is a width the reader
+# chooses, and alignment that depends on it is alignment that moves.
+#
+# ReflowComments is off on purpose. The comments here are hand-wrapped prose
+# that explains why code is the way it is, and a formatter rewrapping them
+# turns a careful paragraph into a diff nobody can read.
+#
+# config.def.h opts out of all of this with a `clang-format off` at the top:
+# its tables are aligned by hand into columns, and that alignment is the
+# documentation.
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 80
+ReflowComments: false
+AlwaysBreakAfterReturnType: None
+BreakBeforeBraces: Attach
+IndentCaseLabels: true
+PointerAlignment: Right
+SpaceBeforeParens: ControlStatements
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+SortIncludes: false
+Cpp11BracedListStyle: false
+AlignAfterOpenBracket: DontAlign
+ContinuationIndentWidth: 4
+SpaceInEmptyBlock: false

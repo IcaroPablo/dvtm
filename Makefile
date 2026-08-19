@@ -4,6 +4,7 @@
 include config.mk
 
 SRC = dvtm.c term.c ui.c
+HDR = dvtm.h term.h tile.h grid.h stack.h fullscreen.h vstack.h fibonacci.h
 BIN = dvtm dvtm-status dvtm-editor dvtm-pager
 MANUALS = dvtm.1 dvtm-editor.1 dvtm-pager.1
 
@@ -22,6 +23,22 @@ config.h:
 
 dvtm: config.h config.mk *.c *.h
 	${CC} ${DVTM_CFLAGS} ${SRC} ${LDFLAGS} ${LIBS} -o $@
+
+# clang-format is not reliably on PATH: macOS keeps it inside the Command Line
+# Tools and Homebrew keeps llvm off PATH entirely. Same search as config.mk does
+# for ncurses -- ask the file system, do not name an operating system.
+CLANG_FORMAT ?= $(firstword $(shell command -v clang-format) \
+	$(wildcard /Library/Developer/CommandLineTools/usr/bin/clang-format \
+		/opt/homebrew/opt/llvm/bin/clang-format \
+		/usr/local/opt/llvm/bin/clang-format) \
+	clang-format)
+
+# config.def.h is in the list and opts out from inside, so that a copy of it
+# living as somebody's config.h keeps opting out too. config.h itself is never
+# touched: it belongs to whoever wrote it.
+format:
+	@echo "formatting with $$(${CLANG_FORMAT} --version)"
+	@${CLANG_FORMAT} -i ${SRC} ${HDR} config.def.h tests/run.c tests/probe.c
 
 man:
 	@for m in ${MANUALS}; do \
@@ -85,4 +102,4 @@ uninstall:
 	@echo removing manual page from ${DESTDIR}${MANPREFIX}/man1
 	@rm -f ${DESTDIR}${MANPREFIX}/man1/dvtm.1
 
-.PHONY: all clean dist install uninstall debug test
+.PHONY: all clean dist install uninstall debug test format

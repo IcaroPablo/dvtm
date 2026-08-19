@@ -1,3 +1,11 @@
+/* The tables below are aligned into columns by hand, and that alignment is how
+ * they are read: which key, which action, which arguments. A formatter reflows
+ * them into something correct and unreadable, so this file opts out of `make
+ * format` -- including the copy of it that becomes somebody's config.h.
+ *
+ * The marker has to be a comment saying that and nothing else, which is why it
+ * is on its own below rather than folded into this paragraph. */
+/* clang-format off */
 #include "dvtm.h"
 
 /* valid curses attributes are listed below they can be ORed

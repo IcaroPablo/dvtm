@@ -497,6 +497,14 @@ about 3100 lines of C, small enough to read in an afternoon and hack on.
 
 ## Development
 
+The house style is in `.clang-format`, and `make format` applies it. Braces on
+the same line, four spaces to indent, no tab characters, eighty columns. Two things opt out on purpose: comments are never
+rewrapped, because they are hand-wrapped prose whose paragraphs a formatter
+would turn into unreadable diffs, and `config.def.h` is skipped entirely — its
+tables are aligned into columns by hand and that alignment is how they are read.
+`clang-format` is found even when it is off `PATH`, as it is inside the macOS
+Command Line Tools; override with `make format CLANG_FORMAT=/path/to/it`.
+
 This fork lives at [IcaroPablo/dvtm](https://github.com/IcaroPablo/dvtm).
 Upstream is at [Github](https://github.com/martanne/dvtm) and
 [Sourcehut](https://git.sr.ht/~martanne/dvtm), and takes patches through the
