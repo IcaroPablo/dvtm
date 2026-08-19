@@ -32,7 +32,7 @@ man:
 debug: clean
 	@$(MAKE) DVTM_CFLAGS='${DEBUG_CFLAGS}'
 
-test: dvtm tests/run tests/probe
+test: dvtm dvtm-editor tests/run tests/probe
 	@tests/run ./dvtm
 
 tests/run: tests/run.c

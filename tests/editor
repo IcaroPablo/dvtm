@@ -1,0 +1,24 @@
+#!/bin/sh
+# A stand-in editor for the copy mode checks.
+#
+# dvtm-editor runs whatever $DVTM_EDITOR, $VISUAL or $EDITOR names, falling back
+# to vi, and hands it the window's contents in a temporary file. The suite used
+# to let that fall through to the real editor, which made the checks depend on
+# which one was installed and on what it prints: the assertion was on the string
+# "NORMAL", a mode indicator some editors show and others do not. On a machine
+# whose vi prints "- +0 1/1 100%" instead, both checks failed with nothing wrong
+# in dvtm.
+#
+# So: print the text that arrived and then a marker, and hold the screen still
+# long enough to be read. The marker comes last on purpose -- a check that waits
+# for it then knows the text is already on screen, with no sleep to tune. Blank
+# lines are dropped so neither can scroll the other away.
+#
+# The file is the last argument, not the first: dvtm passes the editor a `+N`
+# to open the scrollback at the right line, and dvtm-editor appends the
+# temporary file after it.
+for f in "$@"; do :; done
+
+grep -v '^[ 	]*$' "$f"
+printf 'EDITORSTARTED\n'
+sleep 30

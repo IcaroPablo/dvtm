@@ -759,9 +759,9 @@ static void t_cursor_follows_child(void)
  * over the other. Nothing else exercises that path, so a change to how children
  * are forked can break it silently -- which is exactly what Phase 2 changed.
  *
- * Asserts on dvtm-editor's own status line rather than on the copied text,
- * because the text is on screen either way; the status line only appears if the
- * editor really started and received the buffer. */
+ * The editor is tests/editor, which prints a marker of its own and then the
+ * text it was given. The marker only appears if the editor really started; the
+ * text only appears if the buffer reached it down the pipe. */
 static void t_copymode(void)
 {
 	char chord[2];
@@ -779,8 +779,8 @@ static void t_copymode(void)
 	tty_write(chord, 2);
 
 	check("copy mode starts the editor over the pipe pair",
-	      wait_screen("NORMAL", 6000),
-	      "dvtm-editor never showed its status line; the to/from pipes did not work");
+	      wait_screen("EDITORSTARTED", 6000),
+	      "the stand-in editor never ran; the to/from pipes did not work");
 	check("copy mode keeps the window contents",
 	      screen_has("COPYTEXT"),
 	      "the editor started but the window text did not reach it");
@@ -868,7 +868,30 @@ int main(int argc, char *argv[])
 
 	/* Deterministic child shell, whatever the developer's login shell is. */
 	setenv("SHELL", "/bin/sh", 1);
-	unsetenv("DVTM_EDITOR"); /* copy mode must use the built dvtm-editor */
+
+	/* A stand-in editor, so the copy mode checks measure dvtm rather than
+	 * whichever editor this machine happens to have. See tests/editor. */
+	{
+		char ed[1024], cwd[1024];
+		if (!getcwd(cwd, sizeof cwd))
+			die("getcwd: %s", strerror(errno));
+		snprintf(ed, sizeof ed, "%s/tests/editor", cwd);
+		setenv("DVTM_EDITOR", ed, 1);
+	}
+
+	/* Put the build directory first on PATH, so copy mode runs the dvtm-editor
+	 * that was just built. Without this the suite finds whichever one is
+	 * installed -- testing the last release instead of this tree -- and on a
+	 * machine with none installed the copy mode check fails with
+	 * `execv() failed`, which reads like a dvtm bug and is not one. */
+	{
+		char path[4096], cwd[1024];
+		const char *old = getenv("PATH");
+		if (!getcwd(cwd, sizeof cwd))
+			die("getcwd: %s", strerror(errno));
+		snprintf(path, sizeof path, "%s%s%s", cwd, old ? ":" : "", old ? old : "");
+		setenv("PATH", path, 1);
+	}
 	signal(SIGPIPE, SIG_IGN);
 
 	build_terminfo();
