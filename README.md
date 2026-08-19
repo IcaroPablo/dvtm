@@ -1,78 +1,28 @@
-# dvtm - dynamic virtual terminal manager
+# dvtm — dynamic virtual terminal manager
 
-[dvtm](https://www.brain-dump.org/projects/dvtm/) brings the concept
-of tiling window management, popularized by X11-window managers like
-[dwm](https://dwm.suckless.org) to the console. As a console window
-manager it tries to make it easy to work with multiple console based
-programs.
+dvtm brings tiling window management, popularised by X11 window managers like
+[dwm](https://dwm.suckless.org), to the console. It runs several terminal
+programs at once inside one terminal and arranges them for you.
 
 ![abduco+dvtm demo](https://raw.githubusercontent.com/martanne/dvtm/gh-pages/screencast.gif#center)
 
-## News
+This is a fork of [martanne/dvtm](https://github.com/martanne/dvtm), whose last
+release was 0.15 in 2016. The one-line difference: **the terminal emulator
+inside dvtm is gone**, and libvterm does that work now.
 
-- [dvtm-0.15](https://www.brain-dump.org/projects/dvtm/dvtm-0.15.tar.gz)
-  [released](https://lists.suckless.org/dev/1601/28095.html) (09.01.2016)
-- [dvtm-0.14](https://www.brain-dump.org/projects/dvtm/dvtm-0.14.tar.gz)
-  [released](https://lists.suckless.org/dev/1502/25558.html) (19.02.2015)
-- [dvtm-0.13](https://www.brain-dump.org/projects/dvtm/dvtm-0.13.tar.gz)
-  [released](https://lists.suckless.org/dev/1411/24449.html) (15.11.2014)
-- [dvtm-0.12](https://www.brain-dump.org/projects/dvtm/dvtm-0.12.tar.gz)
-  [released](https://lists.suckless.org/dev/1407/22702.html) (05.07.2014)
-- [dvtm-0.11](https://www.brain-dump.org/projects/dvtm/dvtm-0.11.tar.gz)
-  [released](https://lists.suckless.org/dev/1403/20371.html) (08.03.2014)
-- [dvtm-0.10](https://www.brain-dump.org/projects/dvtm/dvtm-0.10.tar.gz)
-  [released](https://lists.suckless.org/dev/1312/18805.html) (28.12.2013)
-- [dvtm-0.9](https://www.brain-dump.org/projects/dvtm/dvtm-0.9.tar.gz)
-  [released](https://lists.suckless.org/dev/1304/15112.html) (3.04.2013)
-- [dvtm-0.8](https://www.brain-dump.org/projects/dvtm/dvtm-0.8.tar.gz)
-  [released](https://lists.suckless.org/dev/1208/12004.html) (1.08.2012)
-- [dvtm-0.7](https://www.brain-dump.org/projects/dvtm/dvtm-0.7.tar.gz)
-  [released](https://lists.suckless.org/dev/1109/9266.html) (4.09.2011)
-- [dvtm-0.6](https://www.brain-dump.org/projects/dvtm/dvtm-0.6.tar.gz)
-  [released](https://lists.suckless.org/dev/1010/6146.html) (8.10.2010)
-- [dvtm-0.5.2](https://www.brain-dump.org/projects/dvtm/dvtm-0.5.2.tar.gz)
-  [released](https://lists.suckless.org/dev/0907/0520.html) (7.07.2009)
-- [dvtm-0.5.1](https://www.brain-dump.org/projects/dvtm/dvtm-0.5.1.tar.gz)
-  [released](https://lists.suckless.org/dwm/0902/7405.html) (8.02.2009)
-- [dvtm-0.5](https://www.brain-dump.org/projects/dvtm/dvtm-0.5.tar.gz)
-  [released](https://lists.suckless.org/dwm/0901/7354.html) (26.01.2009)
-- [dvtm-0.4.1](https://www.brain-dump.org/projects/dvtm/dvtm-0.4.1.tar.gz)
-  [released](https://lists.suckless.org/dwm/0805/5672.html) (10.05.2008)
-- [dvtm-0.4](https://www.brain-dump.org/projects/dvtm/dvtm-0.4.tar.gz)
-  [released](https://lists.suckless.org/dwm/0802/4850.html) (17.02.2008)
-- [dvtm-0.3](https://www.brain-dump.org/projects/dvtm/dvtm-0.3.tar.gz)
-  [released](https://lists.suckless.org/dwm/0801/4735.html) (12.01.2008)
-- [dvtm-0.2](https://www.brain-dump.org/projects/dvtm/dvtm-0.2.tar.gz)
-  [released](https://lists.suckless.org/dwm/0712/4677.html) (29.12.2007)
-- [dvtm-0.1](https://www.brain-dump.org/projects/dvtm/dvtm-0.1.tar.gz)
-  [released](https://lists.suckless.org/dwm/0712/4632.html) (21.12.2007)
-- [dvtm-0.01](https://www.brain-dump.org/projects/dvtm/dvtm-0.01.tar.gz)
-  [released](https://lists.suckless.org/dwm/0712/4424.html) (08.12.2007)
+## What this fork changes
 
-## Download
-
-Either Download the latest [source tarball](https://github.com/martanne/dvtm/releases),
-compile and install it
-
-    $EDITOR config.mk && $EDITOR config.def.h && make && make install
-
-or use one of the distribution provided
-[binary packages](https://repology.org/project/dvtm/packages).
-
-## Changes from upstream dvtm
-
-This fork tracks [martanne/dvtm](https://github.com/martanne/dvtm).
-
-**The big one: the terminal emulator is gone.** `vt.c` was 1972 of dvtm's 3951
-lines — an escape-code parser, a cell grid and a scrollback. The host terminal
-is already an emulator, so every byte a program wrote was parsed here, stored,
+**The big one: the terminal emulator is gone.** `vt.c` was half of dvtm — an
+escape-code parser, a cell grid and a scrollback. The host terminal is already
+an emulator, so every byte a program wrote was parsed here, stored,
 re-serialised and parsed again upstairs: two parsers and two screen models for
 the same byte, and every terminal feature written twice. That half is where the
-defects lived. It now sits on [libvterm](https://www.leonerd.org.uk/code/libvterm/),
-the same emulator neovim uses, in a third of the code.
+defects lived. It now sits on
+[libvterm](https://www.leonerd.org.uk/code/libvterm/), the same emulator neovim
+uses.
 
-    upstream   dvtm.c 1979 + vt.c 1972          = 3951 lines
-    here       dvtm.c 2016 + term.c/ui.c/hdr    = 2995 lines
+    before   dvtm.c 1992 + vt.c 1972 + vt.h 67                     = 4031 lines
+    after    dvtm.c 1827 + term.c 639 + ui.c 304 + headers 332     = 3102 lines
 
 **Fixed**
 
@@ -105,36 +55,34 @@ the same emulator neovim uses, in a third of the code.
   * `forkpty(3)`, which is not POSIX and lives in a different header on every
     system, is gone; the pty is opened with POSIX calls. Two hand-written
     replacements for platforms that lacked it were deleted with it.
+  * The source is plain C99, checked under `-pedantic`, instead of quietly
+    relying on gcc and clang extensions.
+  * `make CFLAGS=...` no longer breaks the build. The build's own flags shared
+    that variable, so setting it — which every ports tree and package build
+    does — deleted the include paths with everything else, and the compile
+    stopped at `'vterm.h' file not found`.
+  * The build finds ncurses even when the package manager keeps it off `PATH`,
+    as Homebrew does. Before, it quietly fell back to the ncurses shipped in
+    macOS and stopped at `alloc_pair`.
+  * Installs to `~/.local` by default, so no administrator rights are needed.
   * `make test` runs a suite that drives the real binary on a terminal and
-    checks what it paints, including cases for every bug above.
-  * Warnings are on by default and the build is clean.
+    checks what it paints, including cases for every bug above. It measures
+    this tree and not what the machine happens to have installed — it used to
+    run whichever `dvtm-editor` was on `PATH` and to assert on a status line
+    that only some editors print.
+  * Warnings are on by default and the build is clean on every system it has
+    been compiled on.
   * Every file parses on its own. `config.h` and the layouts used to be
     fragments that only made sense pasted into `dvtm.c`; they now include
-    `dvtm.h`, which carries the declarations they need. The layouts are named
-    `.h` to match what they are — files that are only ever `#include`d. **A
-    custom `config.h` must change `#include "tile.c"` to `#include "tile.h"`,
-    and add `#include "dvtm.h"` at the top.**
+    `dvtm.h`, which carries the declarations they need, and the layouts are
+    named `.h` to match what they are. See *Configuring* if you have your own
+    `config.h`.
   * The manual page matches the program again. `Mod-E` and `DVTM_PAGER` were
     undocumented, `Mod-/` was described as opening an editor when it opens a
     pager, and the entry for `DVTM_EDITOR` broke off mid-sentence.
   * ncursesw 6.1+ is simply required, so the conditionals that used to stand in
     for other curses libraries are gone. Mouse support is always compiled in
-    and switched at runtime, with `ENABLE_MOUSE` in `config.h` or the `-M`
-    flag; the `CONFIG_MOUSE` compile-time switch no longer exists. **If you
-    have your own `config.h`, delete the `#ifdef CONFIG_MOUSE` around
-    `buttons[]`** or that array compiles away and the build fails.
-  * The build finds ncurses even when the package manager keeps it off `PATH`,
-    as Homebrew does. Before, it quietly fell back to the ncurses shipped in
-    macOS and stopped at `alloc_pair`.
-  * Installs to `~/.local` by default, so no administrator rights are needed.
-  * `make CFLAGS=...` no longer breaks the build. The build's own flags shared
-    that variable, so setting it — which every ports tree and package build
-    does — deleted the include paths with everything else, and the compile
-    stopped at `'vterm.h' file not found`.
-  * `make test` no longer depends on what the developer has installed. It used
-    to run whichever `dvtm-editor` was on `PATH` rather than the one just
-    built, and to assert on a status line that only some editors print; on a
-    machine with a different `vi` two checks failed with nothing wrong in dvtm.
+    and switched at runtime.
 
 **Known problems**
 
@@ -151,12 +99,12 @@ the same emulator neovim uses, in a third of the code.
 
 **Still to do**
 
-  * Build on a BSD or an illumos descendant. It builds and passes its tests on
-    macOS and on Linux against two different libcs, and there is no operating
-    system named anywhere in the source, but "any Unix" stays a claim until
-    someone compiles it on a kernel nobody here had.
+  * Build on a BSD or an illumos descendant. It builds warning-free and passes
+    its tests on macOS with clang, and on Linux with gcc against both glibc and
+    musl, and no operating system is named anywhere in the source — but "any
+    Unix" stays a claim until someone compiles it on a kernel nobody here had.
 
-## Building and testing
+## Building and installing
 
 Dependencies:
 
@@ -169,9 +117,8 @@ Dependencies:
     system, which needs `$(shell)`, `$(wildcard)` and `$(firstword)`. Where the
     system `make` is the BSD one, build with `gmake`.
   * `ncursesw` >= 6.1, built with `--enable-ext-colors` — `alloc_pair()` and the
-    extended pair argument of `wcolor_set()` are what 24-bit colour needs. The
-    build asks `ncursesw6-config` where it lives, on `PATH` first and then in
-    the prefixes where a package manager parks a library it keeps off `PATH`.
+    extended pair argument of `wcolor_set()` are what 24-bit colour needs, and
+    without it ncurses allows only 255 colour pairs at once.
   * `libvterm` >= 0.3. It parses everything the programs inside dvtm write.
   * `tic`, from that same ncurses, to compile `dvtm.info` at install time.
 
@@ -181,18 +128,23 @@ those five should build it. There is deliberately no list of supported systems
 — such a list goes stale, and keeping one true is what invites back the
 conditionals this fork spent its time deleting.
 
+Then:
+
+    make && make install
+
+which installs to `~/.local`; pass `PREFIX=/usr/local` or similar for anywhere
+else. To run the test suite, which needs no `make install` first:
+
+    make test
+
 `CFLAGS` is yours: what you pass is appended after the build's own flags, so it
 wins on anything repeatable and cannot delete the include paths.
 
     make CFLAGS='-O2 -march=native'
 
-Build and install:
-
-    make && make install
-
-Run the tests:
-
-    make test
+Note that `make` prints `Nothing to be done for 'all'` when the binaries are
+already newer than the sources. That is not a failure — touch a source, or run
+`make clean`, if you want to force a rebuild.
 
 ### If the build stops at `'vterm.h' file not found`
 
@@ -205,187 +157,147 @@ it. If yours is somewhere else, say so:
          VTERM_LIBS='-L/your/prefix/lib -lvterm'
 
 or export the same two variables. Both override the search, so nothing in
-`config.mk` needs editing.
-
-To see what it decided, ask make to show the command without running it:
+`config.mk` needs editing. To see what it decided, ask make to show the command
+without running it:
 
     make -n dvtm | tr ' ' '\n' | grep vterm
 
-Note that `make` prints `Nothing to be done for 'all'` when the binaries are
-already newer than the sources. That is not a failure — touch a source, or run
-`make clean`, if you want to force a rebuild.
+## Using dvtm
 
-`make test` needs no `make install` first: it compiles `dvtm.info` into a
-throwaway terminfo tree under `tests/` and points the spawned dvtm at it.
-
-## Why dvtm? The philosophy behind
-
-dvtm strives to adhere to the
-[Unix philosophy](http://www.catb.org/esr/writings/taoup/html/ch01s06.html).
-It tries to do one thing, *dynamic* window management on the console,
-and to do it well.
-
-As such dvtm does *not* implement [session management](#faq) but instead
-delegates this task to a separate tool called
-[abduco](https://www.brain-dump.org/projects/abduco/).
-
-Similarly dvtm's copy mode is implemented by piping the scroll back buffer
-content to an external editor and only storing whatever the editor writes
-to `stdout`. Hence the selection process is delegated to the editor
-where powerful features such as regular expression search are available.
-
-As a result dvtm's source code is relatively small
-([~4000 lines of C](https://www.ohloh.net/p/dvtm/analyses/latest/languages_summary)),
-simple and therefore easy to hack on.
-
-## Quickstart
-
-All of dvtm keybindings start with a common modifier which from now
-on is refered to as `MOD`. By default `MOD` is set to `CTRL+g` however
-this can be changed at runttime with the `-m` command line option.
-For example setting `MOD` to `CTRL-b` is accomplished by starting
-`dvtm -m ^b`.
+Every dvtm key binding starts with a modifier, written `MOD` here. By default
+it is `CTRL+g`; `dvtm -m ^b` changes it at startup.
 
 ### Windows
 
-New windows are created with `MOD+c` and closed with `MOD+x`.
-To switch among the windows use `MOD+j` and `MOD+k` or `MOD+[1..9]`
-where the digit corresponds to the window number which is displayed
-in the title bar. Windows can be minimized and restored with `MOD+.`.
-Input can be directed to all visible window by pressing `MOD+a`,
-issuing the same key combination again restores normal behaviour
-i.e. only the currently focused window will receive input.
+New windows are created with `MOD+c` and closed with `MOD+x x`. Switch between
+them with `MOD+j` and `MOD+k`, or jump straight to one with `MOD+[1..9]` — the
+digit is the window number shown in the title bar. `MOD+.` minimises and
+restores a window, and `MOD+a` sends what you type to every visible window at
+once until you press it again. `MOD+q q` quits dvtm.
+
+`Shift+PageUp` and `Shift+PageDown` scroll back through a window's history. How
+much history is kept is set with `dvtm -h lines`.
 
 ### Layouts
 
-Visible Windows are arranged by a layout. Each layout consists of a
-master and a tile area. Typically the master area occupies the largest
-part of the screen and is intended for the currently most important
-window. The size of the master area can be shrunk with `MOD+h`
-and enlarged with `MOD-l` respectively. Windows can be zoomed into
-the master area with `MOD+Enter`. The number of windows in the
-master area can be increased and decreased with `MOD+i` and `MOD+d`.
+Visible windows are arranged by a layout, which divides the screen into a
+master area and a stack. The master area is the large one, for whatever you are
+working on. `MOD+h` and `MOD+l` shrink and grow it, `MOD+Enter` moves a window
+into it, and `MOD+i` and `MOD+d` change how many windows it holds.
 
-By default dvtm comes with 4 different layouts which can be cycled
-through via `MOD+Space`
+`MOD+Space` cycles through the four layouts enabled by default, each of which
+also has a key of its own:
 
- * vertical stack: master area on the left half, other clients
-   stacked on the right
- * bottom stack: master area on the top half, other clients stacked below
- * grid: every window gets an equally sized portion of the screen
- * fullscreen: only the selected window is shown and occupies the
-   whole available display area `MOD+m`
+ * `MOD+f` vertical stack: master area on the left half, the rest on the right
+ * `MOD+g` grid: every window gets an equally sized portion of the screen
+ * `MOD+b` bottom stack: master area on the top half, the rest stacked below
+ * `MOD+m` fullscreen: only the selected window is shown
 
-Further layouts are included in the source tarball but disabled by
-default.
+More layouts ship with the source and are switched on in `config.h`.
 
 ### Tagging
 
-Each window has a non empty set of tags [1..n] associated with it. A view
-consists of a number of tags. The current view includes all windows
-which are tagged with the currently active tags. The following key
-bindings are used to manipulate the tagsets.
+Each window carries a non-empty set of tags `[1..n]`, and a view is a set of
+tags: the current view shows every window carrying one of the active tags.
 
-- `MOD-0`  view all windows with any tag
-- `Mod-v-Tab` toggles to the previously selected tags
-- `MOD-v-[1..n]` view all windows with nth tag
-- `Mod-V-[1..n]` add/remove all windows with nth tag to/from the view
-- `Mod-t-[1..n]` apply nth tag to focused window
-- `Mod-T-[1..n]` add/remove nth tag to/from focused window
+- `MOD+0` view all windows with any tag
+- `MOD+v Tab` toggle back to the previously selected tags
+- `MOD+v [1..n]` view all windows with the nth tag
+- `MOD+V [1..n]` add/remove all windows with the nth tag to/from the view
+- `MOD+t [1..n]` apply the nth tag to the focused window
+- `MOD+T [1..n]` add/remove the nth tag to/from the focused window
 
-### Statusbar
+### Status bar
 
-dvtm can be instructed to read and display status messages from a named
-pipe. As an example the
-[`dvtm-status` script](https://raw.githubusercontent.com/martanne/dvtm/master/dvtm-status)
-is provided which shows the current time.
+Started with `dvtm -s fifo`, dvtm reads status messages from a named pipe and
+displays them. The
+[`dvtm-status`](https://raw.githubusercontent.com/martanne/dvtm/master/dvtm-status)
+script is provided as an example; it shows the current time. `MOD+s` hides and
+shows the bar, `MOD+S` moves it between the top and the bottom.
 
-### Copymode ###
+### Copy mode
 
-`MOD+e` pipes the whole scroll buffer content to an external editor.
-What ever the editor writes to `stdout` is remembered by dvtm and can
-later be pasted with `MOD+p`.
+`MOD+e` hands the window's whole scrollback to an editor. Whatever the editor
+writes back is remembered by dvtm and can be pasted into any window with
+`MOD+p` — so the selecting is done in the editor, with whatever search and
+regex it has, instead of in dvtm.
 
-In order for this to work the editor needs to be usable as a filter
-and should use `stderr` for its user interface. Examples where this is
-the case include `sandy(1)` and [vis](https://www.brain-dump.org/projects/vis).
+`MOD+E` sends the same text to a pager instead, which only displays it, and
+`MOD+/` opens the pager already searching forward.
 
-    $ echo Hello World | vis - | cat
+The editor is `$DVTM_EDITOR`, then `$VISUAL`, then `$EDITOR`, then `vi`. The
+pager is `$DVTM_PAGER`, then `$PAGER`, then `less`. Any full-screen editor
+works: the text is handed over in a temporary file and the editor gets the
+terminal to itself.
 
-## Patches
+`dvtm(1)` lists every binding, including the ones not mentioned here.
 
-There exist a number of out of tree patches which customize dvtm's
-behaviour:
+## Configuring
 
- - [pertag](http://waxandwane.org/dvtm.html) (see also the corresponding
-   [mailing list post](https://lists.suckless.org/hackers/1510/8186.html))
+dvtm is configured by editing `config.h` and recompiling — `config.def.h` is
+copied to `config.h` on the first build, and is the example to work from. It
+defines the layouts, the key bindings and the colour rules, with macros for the
+common cases.
+
+If you are bringing a `config.h` over from upstream dvtm, two things changed:
+
+  * Add `#include "dvtm.h"` at the top, and change layout includes from
+    `#include "tile.c"` to `#include "tile.h"`. The layouts were renamed to
+    match what they are — files that are only ever `#include`d.
+  * Delete the `#ifdef CONFIG_MOUSE` around `buttons[]`. That compile-time
+    switch no longer exists; mouse support is always built in, and is turned
+    off at runtime with `ENABLE_MOUSE` in `config.h`, the `-M` flag, or
+    `MOD+M`.
 
 ## FAQ
 
-### Detach / reattach functionality
+### Detach and reattach
 
-dvtm doesn't have session support built in. Use
-[abduco](https://www.brain-dump.org/projects/abduco/) instead.
+dvtm has no session support. Use
+[abduco](https://www.brain-dump.org/projects/abduco/):
 
     $ abduco -c dvtm-session
 
-Detach using `CTRL-\` and later reattach with
+Detach with `CTRL+\` and reattach later with
 
     $ abduco -a dvtm-session
 
-### Copy / Paste does not work under X
+### Copy and paste does not work under X
 
-If you have mouse support enabled, which is the case with the
-default settings, you need to hold down shift while selecting
-and inserting text. In case you don't like this behaviour either
-run dvtm with the `-M` command line argument, disable it at run
-time with `MOD+M` or modify `config.def.h` to disable it completely
-at compile time. You will however no longer be able to perform
-other mouse actions like selecting windows etc.
-
-### How to change the key bindings?
-
-The configuration of dvtm is done by creating a custom `config.h`
-and (re)compiling the source code. See the default `config.def.h`
-as an example, adapting it to your preference should be straightforward.
-You basically define a set of layouts and keys which dvtm will use.
-There are some pre defined macros to ease configuration.
+dvtm grabs mouse events by default, which takes them away from the terminal's
+own selection. Hold `Shift` while selecting and pasting, or give up the mouse
+bindings: start with `dvtm -M`, toggle with `MOD+M`, or set `ENABLE_MOUSE` to
+false in `config.h`.
 
 ### WARNING: terminal is not fully functional
 
-This means you haven't installed the `dvtm.info` terminfo description
-which can be done with `tic -s dvtm.info`. If for some reason you
-can't install new terminfo descriptions set the `DVTM_TERM` environment
-variable to a known terminal when starting `dvtm` as in
+The `dvtm.info` terminfo description is not installed. `make install` does it;
+by hand it is `tic -x -s dvtm.info`, and the `-x` is not optional — without it
+`tic` silently drops the capabilities that carry 24-bit colour.
+
+If you cannot install terminfo descriptions at all, name a terminal the system
+already knows and dvtm will use it for its windows:
 
     $ DVTM_TERM=rxvt dvtm
 
-This will instruct dvtm to use rxvt as `$TERM` value within its windows.
+### How do I set the window title?
 
-### How to set the window title?
+With the [xterm escape
+sequence](https://tldp.org/HOWTO/Xterm-Title-3.html#ss3.2):
 
-The window title can be changed by means of a
-[xterm extension](https://tldp.org/HOWTO/Xterm-Title-3.html#ss3.2)
-terminal escape sequence
+    $ printf '\033]0;Your title here\007'
 
-    $ echo -ne "\033]0;Your title here\007"
-
-So for example in `bash` if you want to display the current working
-directory in the window title this can be accomplished by means of
-the following section in your startup files.
+In `bash`, to keep the working directory in the title:
 
     # If this is an xterm set the title to user@host:dir
     case "$TERM" in
     dvtm*|xterm*|rxvt*)
-        PROMPT_COMMAND='echo -ne "\033]0;${USER}@${HOSTNAME}: ${PWD/$HOME/~}\007"'
-        ;;
-    *)
+        PROMPT_COMMAND='printf "\033]0;${USER}@${HOSTNAME}: ${PWD/$HOME/~}\007"'
         ;;
     esac
 
-Other shells provide similar functionality, zsh as an example has a
-[precmd function](http://zsh.sourceforge.net/Doc/Release/Functions.html#Hook-Functions)
-which can be used to achieve the same effect.
+Other shells have an equivalent; zsh has
+[precmd](http://zsh.sourceforge.net/Doc/Release/Functions.html#Hook-Functions).
 
 ### Colours look close, but not right
 
@@ -459,47 +371,38 @@ with *terminal is not fully functional*. An alias is enough:
 Set it globally only where a single modern ncurses serves the whole system.
 Either way a name only your machine knows will not resolve over `ssh`.
 
-Separately, ncurses allows only 255 colour pairs at once unless it was built
-with
-
-    $ ./configure ... --enable-ext-colors
-
-which dvtm requires anyway, and is what `ncursesw6-config` is asked about.
-
 ### Some characters are displayed like garbage
 
-Make sure you compiled dvtm against a unicode aware curses library
-(in case of ncurses this would be `libncursesw`). Also make sure
-that your locale settings contain UTF-8.
+Check that your locale settings say UTF-8. If they do and it still happens with
+a terminal that draws lines through the alternate character set, try
+`NCURSES_NO_UTF8_ACS=1`.
 
-### The numeric keypad does not work with Putty
+### Putty
 
-Disable [application keypad mode](https://the.earth.li/~sgtatham/putty/0.64/htmldoc/Chapter4.html#config-features-application)
-in the Putty configuration under `Terminal => Features => Disable application keypad mode`.
+Under `Terminal => Features`, tick *Disable application keypad mode* to get the
+numeric keypad working. Under `Window => Translation`, set the character set to
+UTF-8, and use `TERM=putty` or `putty-256color`.
 
-### Unicode characters do not work within Putty
+## Design
 
-You have to tell Putty in which
-[character encoding](https://the.earth.li/~sgtatham/putty/0.64/htmldoc/Chapter4.html#config-translation)
-the received data is. Set the dropdown box under `Window => Translation`
-to UTF-8. In order to get proper line drawing characters you proabably
-also want to set the TERM environment variable to `putty` or `putty-256color`.
-If that still doesn't do the trick then try running dvtm with the
-following ncurses related environment variable set `NCURSES_NO_UTF8_ACS=1`.
+dvtm follows the [Unix
+philosophy](http://www.catb.org/esr/writings/taoup/html/ch01s06.html): do one
+thing — *dynamic* window management on the console — and delegate the rest.
+
+Session management is [abduco](https://www.brain-dump.org/projects/abduco/)'s
+job, not dvtm's. Selecting text in copy mode is the editor's job. Emulating a
+terminal is libvterm's job, which is what this fork changed. What is left is
+about 3100 lines of C, small enough to read in an afternoon and hack on.
 
 ## Development
 
-You can always fetch the current code base from the git repository
-located at [Github](https://github.com/martanne/dvtm/) or
-[Sourcehut](https://git.sr.ht/~martanne/dvtm).
-
-If you have comments, suggestions, ideas, a bug report, a patch or
-something else related to dvtm then write to the
-[suckless developer mailing list](https://suckless.org/community)
-or contact me directly.
+This fork lives at [IcaroPablo/dvtm](https://github.com/IcaroPablo/dvtm).
+Upstream is at [Github](https://github.com/martanne/dvtm) and
+[Sourcehut](https://git.sr.ht/~martanne/dvtm), and takes patches through the
+[suckless developer mailing list](https://suckless.org/community).
 
 ## License
 
 dvtm reuses some code of dwm and is released under the same
 [MIT/X11 license](https://raw.githubusercontent.com/martanne/dvtm/master/LICENSE).
-The terminal emulation part is licensed under the ISC license.
+`term.h` and `dvtm-editor.c` carry ISC notices from the code they came from.
