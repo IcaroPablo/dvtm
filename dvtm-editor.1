@@ -23,7 +23,7 @@ file, then opens an editor according to the
 .Sx "ENVIRONMENT VARIABLES" .
 .Pp
 If the invoked editor terminates with a non-zero exit status or
-the file modification time remains unchanged,
+the file comes back with its content unchanged,
 .Nm
 does not output anything.  Otherwise, it outputs the content of the modified temporary
 file to stdout.
@@ -45,6 +45,9 @@ will try to find the user editor by checking these variables in order:
 .Bl -tag -width indent
 .It Ev DVTM_EDITOR
 Permitting to invoke an editor specific to dvtm, or set particular flags.
+The value is split on whitespace, so
+.Ql vis -x
+names a program and an argument.
 .
 .It Ev VISUAL , Ev EDITOR
 Falling back to global defaults:

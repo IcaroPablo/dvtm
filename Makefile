@@ -15,16 +15,13 @@ DVTM_CFLAGS += -DVERSION=\"${VERSION}\"
 # system header can never stop a user from compiling dvtm.
 DEBUG_CFLAGS = ${DVTM_CFLAGS} -UNDEBUG -O0 -g -pedantic
 
-all: dvtm dvtm-editor
+all: dvtm
 
 config.h:
 	cp config.def.h config.h
 
 dvtm: config.h config.mk *.c *.h
 	${CC} ${DVTM_CFLAGS} ${SRC} ${LDFLAGS} ${LIBS} -o $@
-
-dvtm-editor: dvtm-editor.c
-	${CC} ${DVTM_CFLAGS} $^ ${LDFLAGS} -o $@
 
 man:
 	@for m in ${MANUALS}; do \
@@ -35,7 +32,7 @@ man:
 debug: clean
 	@$(MAKE) DVTM_CFLAGS='${DEBUG_CFLAGS}'
 
-test: dvtm dvtm-editor tests/run tests/probe
+test: dvtm tests/run tests/probe
 	@tests/run ./dvtm
 
 tests/run: tests/run.c
@@ -47,7 +44,6 @@ tests/probe: tests/probe.c
 clean:
 	@echo cleaning
 	@rm -f dvtm
-	@rm -f dvtm-editor
 	@rm -f tests/run tests/probe
 	@rm -rf tests/terminfo
 	@rm -rf *.dSYM

@@ -227,6 +227,21 @@ static void screen_row(int row, char *out, size_t n)
 	out[o] = '\0';
 }
 
+/* How many rows carry the text. Enough to tell "still there once" from "written
+ * to the window a second time", which is how a paste that should not have
+ * happened shows up. */
+static int screen_count(const char *text)
+{
+	char line[COLS + 8];
+	int n = 0;
+	for (int r = 0; r < ROWS; r++) {
+		screen_row(r, line, sizeof line);
+		if (strstr(line, text))
+			n++;
+	}
+	return n;
+}
+
 static bool screen_has(const char *text)
 {
 	char line[COLS + 8];
@@ -308,6 +323,20 @@ static bool wait_screen(const char *text, int ms)
 		pump(50);
 	} while (now_ms() < deadline);
 	return screen_has(text);
+}
+
+/* The stand-in editor drops a file before it exits, so a check can tell "it ran
+ * and decided to write nothing back" from "it never ran at all". */
+static bool wait_file(const char *path, int ms)
+{
+	struct stat st;
+	long deadline = now_ms() + ms;
+	do {
+		if (stat(path, &st) == 0)
+			return true;
+		pump(50);
+	} while (now_ms() < deadline);
+	return stat(path, &st) == 0;
 }
 
 static void settle(int ms)
@@ -825,6 +854,88 @@ static void t_copymode(void)
 	reap();
 }
 
+/* dvtm-editor's contract, which nothing checked: what the editor leaves behind
+ * is pasted, and two cases must paste nothing at all -- an editor that exits
+ * without saving, and an editor that saves and then fails. The second is the
+ * only one that separates the exit status from the content comparison, so it
+ * saves the same text the successful case does.
+ *
+ * The window runs `cat` because the pasted bytes have to be visible: dvtm
+ * writes them to the window's pty, and tests/probe puts its terminal in raw
+ * mode with echo off, so nothing would show.
+ */
+static void copymode_paste(const char *mode, bool expect_paste)
+{
+	char witness[512], cwd[256], chord[2];
+	int seen;
+
+	if (!getcwd(cwd, sizeof cwd))
+		die("getcwd: %s", strerror(errno));
+	snprintf(witness, sizeof witness, "%s/tests/witness.%d", cwd, (int)getpid());
+	unlink(witness);
+	setenv("EDITOR_MODE", mode, 1);
+	setenv("EDITOR_WITNESS", witness, 1);
+
+	start("sh -c cat", NULL, NULL);
+	settle(1200);
+
+	/* Put a known line in the window, so that the two declining cases can be
+	 * told apart from a broken check: if dvtm-editor wrongly hands back the
+	 * buffer it was given, this line is what comes back, and it lands on the
+	 * screen a second time. */
+	tty_write("COPYSRC\n", 8);
+	if (!wait_screen("COPYSRC", 4000)) {
+		fail("copy mode paste", "the window never echoed its input");
+		reap();
+		return;
+	}
+	settle(400);
+	seen = screen_count("COPYSRC");
+
+	chord[0] = MOD; chord[1] = 'e';
+	tty_write(chord, 2);
+
+	if (!wait_file(witness, 8000)) {
+		char why[128];
+		snprintf(why, sizeof why, "the %s editor never ran", mode);
+		fail(expect_paste ? "an edited buffer is pasted back"
+		                  : "nothing is pasted when the editor declines", why);
+		reap();
+		unsetenv("EDITOR_MODE");
+		unsetenv("EDITOR_WITNESS");
+		return;
+	}
+	settle(1500);              /* the editor exits; dvtm returns to the window */
+
+	chord[0] = MOD; chord[1] = 'p';
+	tty_write(chord, 2);
+	settle(1500);
+
+	if (expect_paste)
+		check("an edited buffer is pasted back", screen_has("PASTEME"),
+		      "the editor saved PASTEME and Mod-p produced nothing");
+	else {
+		char name[96], why[200];
+		int now = screen_count("COPYSRC");
+		snprintf(name, sizeof name, "nothing is pasted when the editor %s",
+		         !strcmp(mode, "keep") ? "changes nothing" : "fails");
+		snprintf(why, sizeof why,
+		         "the %s editor must leave the register empty; the window got "
+		         "PASTEME=%d and COPYSRC %d times, having had it %d times",
+		         mode, screen_has("PASTEME"), now, seen);
+		check(name, !screen_has("PASTEME") && now == seen, why);
+	}
+
+	reap();
+	unlink(witness);
+	unsetenv("EDITOR_MODE");
+	unsetenv("EDITOR_WITNESS");
+}
+
+static void t_copymode_paste(void)      { copymode_paste("edit", true); }
+static void t_copymode_unchanged(void)  { copymode_paste("keep", false); }
+static void t_copymode_editor_fails(void) { copymode_paste("fail", false); }
+
 /* The main loop registers four kinds of descriptor with select(): the keyboard,
  * the pipe its own signal handlers poke, the command fifo and the status fifo.
  * Nothing here covered the two fifos, which is most of that bookkeeping.
@@ -1013,6 +1124,9 @@ int main(int argc, char *argv[])
 	t_plain_text_default_color();
 	t_cursor_follows_child();
 	t_copymode();
+	t_copymode_paste();
+	t_copymode_unchanged();
+	t_copymode_editor_fails();
 	t_kill_removes_window();
 	t_no_dropped_keys();
 	t_fifos();

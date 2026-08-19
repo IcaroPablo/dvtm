@@ -1,6 +1,5 @@
 /config.h
 /dvtm
-/dvtm-editor
 *.css
 *.html
 /.clangd
@@ -8,4 +7,7 @@
 /tests/run
 /tests/probe
 /tests/terminfo/
+/tests/cmd.*
+/tests/bar.*
+/tests/witness.*
 *.dSYM/

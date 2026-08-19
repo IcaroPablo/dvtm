@@ -1,0 +1,33 @@
+#!/bin/sh
+#
+# dvtm-editor - make a text editor act as a filter.
+#
+# dvtm hands the window's scrollback on stdin and reads back on stdout whatever
+# should land in the paste register. The editor itself needs a terminal, so it
+# gets /dev/tty and not either of those pipes.
+#
+# Nothing is written back if the editor fails, or if the text comes back
+# unchanged: quitting without saving must not clobber what was copied before.
+#
+# This was 140 lines of C. The one behaviour that changed with it: unchanged is
+# decided by comparing the content, where the C compared st_mtime -- whole
+# seconds, so a save made inside the same second as the write was missed. There
+# is no portable way to read a modification time from a shell anyway.
+#
+# Reimplemented in POSIX shell from the C original by Dmitry Bogatov and
+# Marc André Tanner, under the same ISC terms.
+
+editor=${DVTM_EDITOR:-${VISUAL:-${EDITOR:-vi}}}
+
+tmp=$(mktemp "${TMPDIR:-/tmp}/dvtm-editor.XXXXXX") || exit 1
+trap 'rm -f "$tmp" "$tmp.orig"' EXIT HUP INT TERM
+
+cat > "$tmp" || exit 1
+cp "$tmp" "$tmp.orig" || exit 1
+
+# $editor is deliberately unquoted: DVTM_EDITOR is documented to be able to
+# carry flags, and the C version could not honour that -- it passed the whole
+# string to execvp as one program name.
+$editor "$@" "$tmp" < /dev/tty > /dev/tty 2>&1 || exit 1
+
+cmp -s "$tmp" "$tmp.orig" || cat "$tmp"

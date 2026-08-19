@@ -72,6 +72,11 @@ uses.
     that only some editors print.
   * Warnings are on by default and the build is clean on every system it has
     been compiled on.
+  * `dvtm-editor` is a shell script rather than 140 lines of C, which is what
+    `dvtm-pager` beside it always was. One behaviour changed with it: it decides
+    "you quit without saving" by comparing the content rather than the
+    modification time, which is what the C compared — `st_mtime` is whole
+    seconds, so a save made inside the same second as the write was missed.
   * `bstack` and `tstack` were the same fifty lines twice, differing in which
     edge the master area sits on. They are one layout with two names in
     `stack.h` now; see *Configuring* if you have your own `config.h`.
@@ -133,6 +138,7 @@ Dependencies:
     without it ncurses allows only 255 colour pairs at once.
   * `libvterm` >= 0.3. It parses everything the programs inside dvtm write.
   * `tic`, from that same ncurses, to compile `dvtm.info` at install time.
+  * `mktemp(1)`, used by `dvtm-editor` for the buffer it hands the editor.
 
 Nothing else. No `#ifdef` in the source names an operating system, and no `-l`
 flag is there for one libc. Any Unix providing those five should build it.
@@ -162,6 +168,9 @@ letting someone find out on a machine where one is missing.
   * **`Tc`, `setrgbf` and `setrgbb` in `dvtm.info`** — user-defined terminfo
     capabilities, which is why `make install` runs `tic -x`. Without the `-x`
     they are silently dropped and the windows lose 24-bit colour.
+  * **`mktemp(1)`**, which every system has and no standard describes. It is
+    there so the file `dvtm-editor` hands the editor cannot be guessed by
+    something else in the temporary directory first.
   * **`/proc/<pid>/cwd`**, which is Linux and only Linux. This is the exception:
     it is a limitation rather than a dependency, and it is under *Known
     problems* above.
@@ -172,7 +181,6 @@ and gcc; no glibc or BSD libc extension is used anywhere — `memmem` appears on
 in a comment in `tests/run.c` explaining why the suite hand-rolls the search
 instead; and `dvtm-status`, `dvtm-pager` and `tests/editor` are `/bin/sh` with no
 bashisms in them.
-
 
 Then:
 
