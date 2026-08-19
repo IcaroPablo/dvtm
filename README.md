@@ -123,13 +123,6 @@ uses.
     per-operating-system code, which is what this fork spent its time removing.
     Left as it is, and written down here rather than discovered.
 
-**Still to do**
-
-  * Build on a BSD or an illumos descendant. It builds warning-free and passes
-    its tests on macOS with clang, and on Linux with gcc against both glibc and
-    musl, and no operating system is named anywhere in the source — but "any
-    Unix" stays a claim until someone compiles it on a kernel nobody here had.
-
 ## Building and installing
 
 Dependencies:
@@ -154,6 +147,11 @@ flag is there for one libc. Any Unix providing those five should build it.
 There is deliberately no list of supported systems — such a list goes stale, and
 keeping one true is what invites back the conditionals this fork spent its time
 deleting.
+
+What there is instead is a record of what has actually been compiled: macOS
+with clang, Linux with gcc against both glibc and musl, and OpenBSD. A system
+that provides the five and is not in that sentence has not failed; it is one
+nobody has tried yet.
 
 ### What here is not POSIX
 
