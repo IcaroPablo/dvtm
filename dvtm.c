@@ -34,7 +34,7 @@
 #include <errno.h>
 #include <pwd.h>
 #include <termios.h>
-#include "vt.h"
+#include "term.h"
 
 #ifndef NCURSES_REENTRANT
 # define set_escdelay(d) (ESCDELAY = (d))
@@ -57,8 +57,8 @@ typedef struct {
 typedef struct Client Client;
 struct Client {
 	WINDOW *window;
-	Vt *term;
-	Vt *editor, *app;
+	Term *term;
+	Term *editor, *app;
 	int editor_fds[2];
 	volatile sig_atomic_t editor_died;
 	const char *cmd;
@@ -429,7 +429,7 @@ draw_border(Client *c) {
 
 static void
 draw_content(Client *c) {
-	vt_draw(c->term, c->window, c->has_title_line, 0);
+	term_draw(c->term, c->window, c->has_title_line, 0);
 }
 
 static void
@@ -601,7 +601,7 @@ focus(Client *c) {
 			wnoutrefresh(c->window);
 		}
 	}
-	curs_set(c && !c->minimized && vt_cursor_visible(c->term));
+	curs_set(c && !c->minimized && term_cursor_visible(c->term));
 }
 
 static void
@@ -620,12 +620,14 @@ applycolorrules(Client *c) {
 		}
 	}
 
-	vt_default_colors_set(c->term, attrs, fg, bg);
+	c->term->defattrs = attrs;
+	c->term->deffg = fg;
+	c->term->defbg = bg;
 }
 
 static void
-term_title_handler(Vt *term, const char *title) {
-	Client *c = (Client *)vt_data_get(term);
+term_title_handler(Term *term, const char *title) {
+	Client *c = term->data;
 	if (title)
 		strncpy(c->title, title, sizeof(c->title) - 1);
 	c->title[title ? sizeof(c->title) - 1 : 0] = '\0';
@@ -636,8 +638,8 @@ term_title_handler(Vt *term, const char *title) {
 }
 
 static void
-term_urgent_handler(Vt *term) {
-	Client *c = (Client *)vt_data_get(term);
+term_urgent_handler(Term *term) {
+	Client *c = term->data;
 	c->urgent = true;
 	printf("\a");
 	fflush(stdout);
@@ -674,9 +676,9 @@ resize_client(Client *c, int w, int h) {
 	}
 	if (resize_window || c->has_title_line != has_title_line) {
 		c->has_title_line = has_title_line;
-		vt_resize(c->app, h - has_title_line, w);
+		term_resize(c->app, h - has_title_line, w);
 		if (c->editor)
-			vt_resize(c->editor, h - has_title_line, w);
+			term_resize(c->editor, h - has_title_line, w);
 	}
 }
 
@@ -730,7 +732,7 @@ reap_children(void) {
 				c->died = true;
 				break;
 			}
-			if (c->editor && vt_pid_get(c->editor) == pid) {
+			if (c->editor && c->editor->pid == pid) {
 				c->editor_died = true;
 				break;
 			}
@@ -763,7 +765,7 @@ sigchld_handler(int sig) {
 				c->died = true;
 				break;
 			}
-			if (c->editor && vt_pid_get(c->editor) == pid) {
+			if (c->editor && c->editor->pid == pid) {
 				c->editor_died = true;
 				break;
 			}
@@ -936,11 +938,11 @@ keypress(int code) {
 		if (is_content_visible(c)) {
 			c->urgent = false;
 			if (code == '\e')
-				vt_write(c->term, buf, len);
+				term_write(c->term, buf, len);
 			else
-				vt_keypress(c->term, code);
+				term_keypress(c->term, code);
 			if (key != -1)
-				vt_keypress(c->term, key);
+				term_keypress(c->term, key);
 		}
 		if (!runinall)
 			break;
@@ -995,8 +997,7 @@ setup(void) {
 	keypad(stdscr, TRUE);
 	mouse_setup();
 	raw();
-	vt_init();
-	vt_keytable_set(keytable, LENGTH(keytable));
+	term_init(keytable, LENGTH(keytable));
 	for (unsigned int i = 0; i < LENGTH(colors); i++) {
 		if (COLORS == 256) {
 			if (colors[i].fg256)
@@ -1004,7 +1005,7 @@ setup(void) {
 			if (colors[i].bg256)
 				colors[i].bg = colors[i].bg256;
 		}
-		colors[i].pair = vt_color_reserve(colors[i].fg, colors[i].bg);
+		colors[i].pair = term_color_get(NULL, colors[i].fg, colors[i].bg);
 	}
 	resize_screen();
 	if (pipe(sigpipe) == 0) {
@@ -1051,7 +1052,7 @@ destroy(Client *c) {
 		lastsel = NULL;
 	werase(c->window);
 	wnoutrefresh(c->window);
-	vt_destroy(c->term);
+	term_destroy(c->term);
 	delwin(c->window);
 	if (!clients && LENGTH(actions)) {
 		if (!strcmp(c->cmd, shell))
@@ -1067,7 +1068,6 @@ static void
 cleanup(void) {
 	while (clients)
 		destroy(clients);
-	vt_shutdown();
 	endwin();
 	free(copyreg.data);
 	if (bar.fd > 0)
@@ -1114,7 +1114,7 @@ create(const char *args[]) {
 		return;
 	}
 
-	c->term = c->app = vt_create(screen.h, screen.w, screen.history);
+	c->term = c->app = term_create(screen.h, screen.w, screen.history);
 	if (!c->term) {
 		delwin(c->window);
 		free(c);
@@ -1137,12 +1137,12 @@ create(const char *args[]) {
 
 	if (args && args[2])
 		cwd = !strcmp(args[2], "$CWD") ? getcwd_by_pid(sel) : (char*)args[2];
-	c->pid = vt_forkpty(c->term, shell, pargs, cwd, env, NULL, NULL);
+	c->pid = term_forkpty(c->term, shell, pargs, cwd, env, NULL, NULL);
 	if (args && args[2] && !strcmp(args[2], "$CWD"))
 		free(cwd);
-	vt_data_set(c->term, c);
-	vt_title_handler_set(c->term, term_title_handler);
-	vt_urgent_handler_set(c->term, term_urgent_handler);
+	c->term->data = c;
+	c->term->title_handler = term_title_handler;
+	c->term->urgent_handler = term_urgent_handler;
 	applycolorrules(c);
 	c->x = wax;
 	c->y = way;
@@ -1159,7 +1159,7 @@ copymode(const char *args[]) {
 
 	bool colored = strstr(args[0], "pager") != NULL;
 
-	if (!(sel->editor = vt_create(sel->h - sel->has_title_line, sel->w, 0)))
+	if (!(sel->editor = term_create(sel->h - sel->has_title_line, sel->w, 0)))
 		return;
 
 	int *to = &sel->editor_fds[0];
@@ -1168,13 +1168,13 @@ copymode(const char *args[]) {
 
 	const char *argv[3] = { args[0], NULL, NULL };
 	char argline[32];
-	int line = vt_content_start(sel->app);
+	int line = term_content_start(sel->app);
 	snprintf(argline, sizeof(argline), "+%d", line);
 	argv[1] = argline;
 
 	char *cwd = getcwd_by_pid(sel);
-	if (vt_forkpty(sel->editor, args[0], argv, cwd, NULL, to, from) < 0) {
-		vt_destroy(sel->editor);
+	if (term_forkpty(sel->editor, args[0], argv, cwd, NULL, to, from) < 0) {
+		term_destroy(sel->editor);
 		sel->editor = NULL;
 		return;
 	}
@@ -1183,7 +1183,7 @@ copymode(const char *args[]) {
 
 	if (sel->editor_fds[0] != -1) {
 		char *buf = NULL;
-		size_t len = vt_content_get(sel->app, &buf, colored);
+		size_t len = term_content_get(sel->app, &buf, colored);
 		char *cur = buf;
 		while (len > 0) {
 			ssize_t res = write(sel->editor_fds[0], cur, len);
@@ -1201,7 +1201,7 @@ copymode(const char *args[]) {
 	}
 
 	if (args[1])
-		vt_write(sel->editor, args[1], strlen(args[1]));
+		term_write(sel->editor, args[1], strlen(args[1]));
 }
 
 static void
@@ -1337,7 +1337,7 @@ killclient(const char *args[]) {
 static void
 paste(const char *args[]) {
 	if (sel && copyreg.data)
-		vt_write(sel->term, copyreg.data, copyreg.len);
+		term_write(sel->term, copyreg.data, copyreg.len);
 }
 
 static void
@@ -1350,7 +1350,7 @@ static void
 redraw(const char *args[]) {
 	for (Client *c = clients; c; c = c->next) {
 		if (!c->minimized) {
-			vt_dirty(c->term);
+			c->term->dirty = true;
 			wclear(c->window);
 			wnoutrefresh(c->window);
 		}
@@ -1364,18 +1364,18 @@ scrollback(const char *args[]) {
 		return;
 
 	if (!args[0] || atoi(args[0]) < 0)
-		vt_scroll(sel->term, -sel->h/2);
+		term_scroll(sel->term, -sel->h/2);
 	else
-		vt_scroll(sel->term,  sel->h/2);
+		term_scroll(sel->term,  sel->h/2);
 
 	draw(sel);
-	curs_set(vt_cursor_visible(sel->term));
+	curs_set(term_cursor_visible(sel->term));
 }
 
 static void
 sendkeys(const char *args[]) {
 	if (sel && args && args[0])
-		vt_write(sel->term, args[0], strlen(args[0]));
+		term_write(sel->term, args[0], strlen(args[0]));
 }
 
 static void
@@ -1502,7 +1502,7 @@ toggleminimize(const char *args[]) {
 		for (c = nextvisible(clients); c && (t = nextvisible(c->next)) && !t->minimized; c = t);
 		attachafter(m, c);
 	} else { /* window is no longer minimized, move it to the master area */
-		vt_dirty(m->term);
+		m->term->dirty = true;
 		detach(m);
 		attach(m);
 	}
@@ -1685,7 +1685,7 @@ handle_mouse(void) {
 
 	debug("mouse x:%d y:%d cx:%d cy:%d mask:%d\n", event.x, event.y, event.x - msel->x, event.y - msel->y, event.bstate);
 
-	vt_mouse(msel->term, event.x - msel->x, event.y - msel->y, event.bstate);
+	term_mouse(msel->term, event.x - msel->x, event.y - msel->y, event.bstate);
 
 	for (i = 0; i < LENGTH(buttons); i++) {
 		if (event.bstate & buttons[i].mask)
@@ -1745,10 +1745,10 @@ handle_editor(Client *c) {
 	}
 	c->editor_died = false;
 	c->editor_fds[1] = -1;
-	vt_destroy(c->editor);
+	term_destroy(c->editor);
 	c->editor = NULL;
 	c->term = c->app;
-	vt_dirty(c->term);
+	c->term->dirty = true;
 	draw_content(c);
 	wnoutrefresh(c->window);
 }
@@ -1911,7 +1911,7 @@ main(int argc, char *argv[]) {
 				c = t;
 				continue;
 			}
-			int pty = c->editor ? vt_pty_get(c->editor) : vt_pty_get(c->app);
+			int pty = c->editor ? c->editor->pty : c->app->pty;
 			FD_SET(pty, &rd);
 			nfds = MAX(nfds, pty);
 			c = c->next;
@@ -1988,8 +1988,8 @@ main(int argc, char *argv[]) {
 			handle_statusbar();
 
 		for (Client *c = clients; c; c = c->next) {
-			if (FD_ISSET(vt_pty_get(c->term), &rd)) {
-				if (vt_process(c->term) < 0 && errno == EIO) {
+			if (FD_ISSET(c->term->pty, &rd)) {
+				if (term_process(c->term) < 0 && errno == EIO) {
 					if (c->editor)
 						c->editor_died = true;
 					else
@@ -2006,7 +2006,7 @@ main(int argc, char *argv[]) {
 
 		if (is_content_visible(sel)) {
 			draw_content(sel);
-			curs_set(vt_cursor_visible(sel->term));
+			curs_set(term_cursor_visible(sel->term));
 			wnoutrefresh(sel->window);
 		}
 	}

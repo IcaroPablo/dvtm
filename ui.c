@@ -10,7 +10,7 @@
 #include <string.h>
 #include <wchar.h>
 
-#include "internal.h"
+#include "term.h"
 
 int32_t default_fg = -1, default_bg = -1;
 bool has_default_colors;
@@ -53,7 +53,7 @@ int32_t color_of(const VTermColor *c, bool is_fg)
 	return is_fg ? default_fg : default_bg;
 }
 
-int vt_color_get(Vt *t, int32_t fg, int32_t bg)
+int term_color_get(Term *t, int32_t fg, int32_t bg)
 {
 	if (fg == -1)
 		fg = (t ? t->deffg : default_fg);
@@ -73,20 +73,8 @@ int vt_color_get(Vt *t, int32_t fg, int32_t bg)
 	return pair > 0 ? pair : 0;
 }
 
-int vt_color_reserve(int32_t fg, int32_t bg)
-{
-	return vt_color_get(NULL, fg, bg);
-}
-
-void vt_default_colors_set(Vt *t, attr_t attrs, int32_t fg, int32_t bg)
-{
-	t->defattrs = attrs;
-	t->deffg = fg;
-	t->defbg = bg;
-}
-
 /* Ask ncurses what this terminal calls its own default colours -- what a -1 in
- * a colour pair means. Called from vt_init. */
+ * a colour pair means. Called from term_init. */
 void ui_init_colors(void)
 {
 	short fg = -1, bg = -1;
@@ -100,19 +88,19 @@ void ui_init_colors(void)
 	default_fg = fg == -1 ? COLOR_WHITE : fg;
 	default_bg = bg == -1 ? COLOR_BLACK : bg;
 	has_default_colors = (use_default_colors() == OK);
-	vt_color_reserve(COLOR_WHITE, COLOR_BLACK);
+	term_color_get(NULL, COLOR_WHITE, COLOR_BLACK);
 }
 
 /* ── painting ─────────────────────────────────────────────────────────────── */
 
 /* The cells for one visible row: either from the scrollback, when scrolled
  * back, or from the live screen. Returns false if there is nothing there. */
-static bool row_cells(Vt *t, int row, VTermScreenCell *out)
+static bool row_cells(Term *t, int row, VTermScreenCell *out)
 {
 	int sb_row = t->sb_count - t->scroll + row;
 
 	if (t->scroll && sb_row < t->sb_count) {
-		Line *l = sb_at(t, sb_row);
+		Line *l = term_sb_at(t, sb_row);
 		if (!l)
 			return false;
 		for (int c = 0; c < t->cols; c++) {
@@ -144,7 +132,7 @@ static attr_t attrs_of(const VTermScreenCell *cell)
 	return a;
 }
 
-void vt_draw(Vt *t, WINDOW *win, int srow, int scol)
+void term_draw(Term *t, WINDOW *win, int srow, int scol)
 {
 	VTermScreenCell *cells;
 
@@ -176,7 +164,7 @@ void vt_draw(Vt *t, WINDOW *win, int srow, int scol)
 			 * 24-bit colour. Passing a short here reads two bytes of adjacent
 			 * stack as the top half of the pair number and paints arbitrary
 			 * colours. */
-			pair = vt_color_get(t, color_of(&cell->fg, true),
+			pair = term_color_get(t, color_of(&cell->fg, true),
 			                       color_of(&cell->bg, false));
 			wcolor_set(win, 0, &pair);
 

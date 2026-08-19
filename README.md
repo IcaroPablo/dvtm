@@ -126,8 +126,6 @@ the same emulator neovim uses, in a third of the code.
 
 **Still to do**
 
-  * Collapse what is left of the `vt_*` interface, now that the engine behind
-    it has been replaced, and rename it to match what it actually is.
   * Remove the remaining ncurses-version conditionals; ncursesw 6.1+ is the
     only supported curses.
   * Make each file compile on its own, which is the `config.h` problem above.

@@ -1,12 +1,9 @@
 /*
  * term.c - one child: its pty, its libvterm instance, and its screen state.
  *
- * Implements the child half of vt.h: the pty, the libvterm instance and the
- * scrollback. Painting lives in ui.c.
- * replaced without touching the rest of the program. libvterm owns the escape
- * parsing and the cell grid; the scrollback is ours, because libvterm hands
- * lines off as they fall out of the top of the screen and expects somebody
- * else to keep them.
+ * libvterm owns the escape parsing and the cell grid. The scrollback is ours,
+ * because libvterm hands lines off as they fall out of the top of the screen
+ * and expects somebody else to keep them. Painting lives in ui.c.
  */
 #include <errno.h>
 #include <langinfo.h>
@@ -25,7 +22,7 @@
 #include <termios.h>
 #include <wchar.h>
 
-#include "internal.h"
+#include "term.h"
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -33,7 +30,7 @@
 static const char * const *keytable_overlay;
 static int keytable_overlay_len;
 static bool is_utf8;
-static char vt_term[32];   /* the TERM handed to children */
+static char child_term[32];   /* the TERM handed to children */
 
 /* ── scrollback ───────────────────────────────────────────────────────────── */
 
@@ -45,7 +42,7 @@ static void line_free(Line *l)
 }
 
 /* Index into the ring, oldest line first. */
-Line *sb_at(Vt *t, int n)
+Line *term_sb_at(Term *t, int n)
 {
 	if (n < 0 || n >= t->sb_count)
 		return NULL;
@@ -54,7 +51,7 @@ Line *sb_at(Vt *t, int n)
 
 static int sb_pushline(int cols, const VTermScreenCell *cells, void *user)
 {
-	Vt *t = user;
+	Term *t = user;
 	Line *l;
 
 	if (t->sb_size <= 0)
@@ -80,7 +77,7 @@ static int sb_pushline(int cols, const VTermScreenCell *cells, void *user)
 /* libvterm asks for a line back when the screen scrolls down past the top. */
 static int sb_popline(int cols, VTermScreenCell *cells, void *user)
 {
-	Vt *t = user;
+	Term *t = user;
 	Line *l;
 
 	if (t->sb_count == 0)
@@ -99,9 +96,9 @@ static int sb_popline(int cols, VTermScreenCell *cells, void *user)
 
 static int sb_clear(void *user)
 {
-	Vt *t = user;
+	Term *t = user;
 	for (int i = 0; i < t->sb_count; i++)
-		line_free(sb_at(t, i));
+		line_free(term_sb_at(t, i));
 	t->sb_count = t->sb_first = 0;
 	return 1;
 }
@@ -110,19 +107,19 @@ static int sb_clear(void *user)
 
 static int cb_damage(VTermRect rect, void *user)
 {
-	((Vt *)user)->dirty = true;
+	((Term *)user)->dirty = true;
 	return 1;
 }
 
 static int cb_moverect(VTermRect dest, VTermRect src, void *user)
 {
-	((Vt *)user)->dirty = true;
+	((Term *)user)->dirty = true;
 	return 1;
 }
 
 static int cb_movecursor(VTermPos pos, VTermPos oldpos, int visible, void *user)
 {
-	Vt *t = user;
+	Term *t = user;
 	t->cursor = pos;
 	t->dirty = true;
 	return 1;
@@ -130,7 +127,7 @@ static int cb_movecursor(VTermPos pos, VTermPos oldpos, int visible, void *user)
 
 static int cb_settermprop(VTermProp prop, VTermValue *val, void *user)
 {
-	Vt *t = user;
+	Term *t = user;
 
 	switch (prop) {
 	case VTERM_PROP_CURSORVISIBLE:
@@ -153,7 +150,7 @@ static int cb_settermprop(VTermProp prop, VTermValue *val, void *user)
 
 static int cb_bell(void *user)
 {
-	Vt *t = user;
+	Term *t = user;
 	if (t->urgent_handler)
 		t->urgent_handler(t);
 	return 1;
@@ -161,7 +158,7 @@ static int cb_bell(void *user)
 
 static int cb_resize(int rows, int cols, void *user)
 {
-	Vt *t = user;
+	Term *t = user;
 	t->rows = rows;
 	t->cols = cols;
 	t->dirty = true;
@@ -182,9 +179,12 @@ static const VTermScreenCallbacks screen_callbacks = {
 
 /* ── lifecycle ────────────────────────────────────────────────────────────── */
 
-void vt_init(void)
+void term_init(char const * const keytable[], int count)
 {
 	const char *cset, *term;
+
+	keytable_overlay = keytable;
+	keytable_overlay_len = count;
 
 	ui_init_colors();
 
@@ -197,43 +197,13 @@ void vt_init(void)
 	 * cursor redraws what you typed instead of moving over it. */
 	if (!(term = getenv("DVTM_TERM")))
 		term = "dvtm";
-	snprintf(vt_term, sizeof vt_term, "%s%s", term,
+	snprintf(child_term, sizeof child_term, "%s%s", term,
 	         COLORS >= 256 ? "-256color" : "");
 }
 
-void vt_shutdown(void)
+Term *term_create(int rows, int cols, int scroll_buf_sz)
 {
-}
-
-void vt_keytable_set(char const * const keytable[], int count)
-{
-	keytable_overlay = keytable;
-	keytable_overlay_len = count;
-}
-
-void vt_title_handler_set(Vt *t, vt_title_handler_t handler)
-{
-	t->title_handler = handler;
-}
-
-void vt_urgent_handler_set(Vt *t, vt_urgent_handler_t handler)
-{
-	t->urgent_handler = handler;
-}
-
-void vt_data_set(Vt *t, void *data)
-{
-	t->data = data;
-}
-
-void *vt_data_get(Vt *t)
-{
-	return t->data;
-}
-
-Vt *vt_create(int rows, int cols, int scroll_buf_sz)
-{
-	Vt *t;
+	Term *t;
 
 	if (rows <= 0 || cols <= 0)
 		return NULL;
@@ -265,14 +235,14 @@ Vt *vt_create(int rows, int cols, int scroll_buf_sz)
 	return t;
 }
 
-void vt_resize(Vt *t, int rows, int cols)
+void term_resize(Term *t, int rows, int cols)
 {
 	struct winsize ws = { .ws_row = rows, .ws_col = cols };
 
 	if (rows <= 0 || cols <= 0 || (rows == t->rows && cols == t->cols))
 		return;
 
-	vt_noscroll(t);
+	term_noscroll(t);
 	vterm_set_size(t->vt, rows, cols);
 	t->rows = rows;
 	t->cols = cols;
@@ -281,12 +251,12 @@ void vt_resize(Vt *t, int rows, int cols)
 		ioctl(t->pty, TIOCSWINSZ, &ws);
 }
 
-void vt_destroy(Vt *t)
+void term_destroy(Term *t)
 {
 	if (!t)
 		return;
 	for (int i = 0; i < t->sb_count; i++)
-		line_free(sb_at(t, i));
+		line_free(term_sb_at(t, i));
 	free(t->sb);
 	if (t->vt)
 		vterm_free(t->vt);
@@ -347,7 +317,7 @@ static pid_t pty_fork(int *master, const struct winsize *ws)
 	}
 }
 
-pid_t vt_forkpty(Vt *t, const char *p, const char *argv[], const char *cwd,
+pid_t term_forkpty(Term *t, const char *p, const char *argv[], const char *cwd,
                  const char *env[], int *to, int *from)
 {
 	int vt2ed[2], ed2vt[2];
@@ -390,7 +360,7 @@ pid_t vt_forkpty(Vt *t, const char *p, const char *argv[], const char *cwd,
 
 		for (const char **envp = env; envp && envp[0]; envp += 2)
 			setenv(envp[0], envp[1], 1);
-		setenv("TERM", vt_term, 1);
+		setenv("TERM", child_term, 1);
 		setenv("COLORTERM", "truecolor", 1);
 
 		if (cwd && chdir(cwd) != 0) {
@@ -422,19 +392,9 @@ pid_t vt_forkpty(Vt *t, const char *p, const char *argv[], const char *cwd,
 	return t->pid = pid;
 }
 
-int vt_pty_get(Vt *t)
-{
-	return t->pty;
-}
-
-pid_t vt_pid_get(Vt *t)
-{
-	return t->pid;
-}
-
 /* ── reading and writing ──────────────────────────────────────────────────── */
 
-ssize_t vt_write(Vt *t, const char *buf, size_t len)
+ssize_t term_write(Term *t, const char *buf, size_t len)
 {
 	ssize_t ret = (ssize_t)len;
 
@@ -453,16 +413,16 @@ ssize_t vt_write(Vt *t, const char *buf, size_t len)
 
 /* Send whatever libvterm has queued for the child: key presses and mouse
  * reports come back out this way, as the bytes a real terminal would send. */
-static void vt_flush_output(Vt *t)
+static void flush_output(Term *t)
 {
 	char buf[512];
 	size_t len;
 
 	while ((len = vterm_output_read(t->vt, buf, sizeof buf)) > 0)
-		vt_write(t, buf, len);
+		term_write(t, buf, len);
 }
 
-int vt_process(Vt *t)
+int term_process(Term *t)
 {
 	char buf[8192];
 	ssize_t res;
@@ -481,7 +441,7 @@ int vt_process(Vt *t)
 		return -1;
 	}
 	vterm_input_write(t->vt, buf, (size_t)res);
-	vt_flush_output(t);
+	flush_output(t);
 	return 0;
 }
 
@@ -513,17 +473,17 @@ static VTermKey vterm_key_of(int keycode)
 	}
 }
 
-void vt_keypress(Vt *t, int keycode)
+void term_keypress(Term *t, int keycode)
 {
 	VTermKey key;
 
-	vt_noscroll(t);
+	term_noscroll(t);
 
 	/* A sequence supplied through config.h wins: it exists precisely to say
 	 * something this mapping would otherwise get wrong. */
 	if (keycode >= 0 && keycode < keytable_overlay_len &&
 	    keytable_overlay && keytable_overlay[keycode]) {
-		vt_write(t, keytable_overlay[keycode], strlen(keytable_overlay[keycode]));
+		term_write(t, keytable_overlay[keycode], strlen(keytable_overlay[keycode]));
 		return;
 	}
 
@@ -534,10 +494,10 @@ void vt_keypress(Vt *t, int keycode)
 	} else {
 		return;
 	}
-	vt_flush_output(t);
+	flush_output(t);
 }
 
-void vt_mouse(Vt *t, int x, int y, mmask_t mask)
+void term_mouse(Term *t, int x, int y, mmask_t mask)
 {
 	vterm_mouse_move(t->vt, y, x, VTERM_MOD_NONE);
 
@@ -554,12 +514,12 @@ void vt_mouse(Vt *t, int x, int y, mmask_t mask)
 	else if (mask & BUTTON3_RELEASED)
 		vterm_mouse_button(t->vt, 3, false, VTERM_MOD_NONE);
 
-	vt_flush_output(t);
+	flush_output(t);
 }
 
 /* ── scrollback navigation ────────────────────────────────────────────────── */
 
-void vt_scroll(Vt *t, int rows)
+void term_scroll(Term *t, int rows)
 {
 	int max = t->sb_count;
 
@@ -571,7 +531,7 @@ void vt_scroll(Vt *t, int rows)
 	t->dirty = true;
 }
 
-void vt_noscroll(Vt *t)
+void term_noscroll(Term *t)
 {
 	if (t->scroll) {
 		t->scroll = 0;
@@ -579,24 +539,19 @@ void vt_noscroll(Vt *t)
 	}
 }
 
-int vt_content_start(Vt *t)
+int term_content_start(Term *t)
 {
 	return t->sb_count - t->scroll;
 }
 
-bool vt_cursor_visible(Vt *t)
+bool term_cursor_visible(Term *t)
 {
 	return t->scroll ? false : t->cursor_visible;
 }
 
-void vt_dirty(Vt *t)
-{
-	t->dirty = true;
-}
-
 /* ── copy mode ────────────────────────────────────────────────────────────── */
 
-size_t vt_content_get(Vt *t, char **buf, bool colored)
+size_t term_content_get(Term *t, char **buf, bool colored)
 {
 	int lines = t->sb_count + t->rows;
 	size_t size = (size_t)lines * ((size_t)(t->cols + 1) * ((colored ? 64 : 0) + MB_CUR_MAX));
@@ -617,7 +572,7 @@ size_t vt_content_get(Vt *t, char **buf, bool colored)
 		int32_t prev_fg = -2, prev_bg = -2;
 
 		if (i < t->sb_count) {
-			Line *l = sb_at(t, i);
+			Line *l = term_sb_at(t, i);
 			for (int c = 0; c < t->cols; c++) {
 				if (l && c < l->cols)
 					cells[c] = l->cells[c];

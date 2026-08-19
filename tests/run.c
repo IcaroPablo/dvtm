@@ -659,7 +659,7 @@ static void t_plain_text_default_color(void)
 	reap();
 }
 
-/* vt_draw must leave the cursor where the child put it. Without the final
+/* term_draw must leave the cursor where the child put it. Without the final
  * wmove it stays wherever the last character was written, which is the bottom
  * right of the window, and the terminal draws the cursor in the wrong place. */
 static void t_cursor_follows_child(void)
@@ -686,7 +686,7 @@ static void t_cursor_follows_child(void)
 	reap();
 }
 
-/* Copy mode is the only user of vt_forkpty()'s to/from pipes: dvtm hands the
+/* Copy mode is the only user of term_forkpty()'s to/from pipes: dvtm hands the
  * window's contents to an editor over one pipe and reads the selection back
  * over the other. Nothing else exercises that path, so a change to how children
  * are forked can break it silently -- which is exactly what Phase 2 changed.
