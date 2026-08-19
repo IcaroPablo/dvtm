@@ -371,6 +371,49 @@ with *terminal is not fully functional*. An alias is enough:
 Set it globally only where a single modern ncurses serves the whole system.
 Either way a name only your machine knows will not resolve over `ssh`.
 
+If you carry one set of dotfiles between machines, an alias gets awkward: the
+name is right on one machine and wrong on the next. A small wrapper keeps the
+two apart. In the file every machine shares:
+
+    dvtm() {
+        if [ -n "$DVTM_OUTER_TERM" ]; then
+            env TERM="$DVTM_OUTER_TERM" dvtm "$@"
+        else
+            command dvtm "$@"
+        fi
+    }
+
+and in the rc file of the machine that actually has the description:
+
+    DVTM_OUTER_TERM=myterm-direct
+
+A machine that sets nothing behaves exactly as before, so there is nothing to
+edit when you move. Three details in there are deliberate:
+
+  * **`env`, and not `TERM=myterm-direct dvtm`.** The second form makes your
+    *shell* load the description as well, and a shell linked against an older
+    ncurses cannot read a direct-colour one — you get `can't find terminal
+    definition` printed on every launch. `env` hands it to dvtm alone.
+  * **A variable, and not an alias.** The function reads it when it runs, so it
+    does not matter whether the shared file is sourced before or after the
+    machine's own rc. An alias named `dvtm` has the opposite problem: it
+    expands into the `dvtm() { … }` that comes later, that definition fails to
+    parse, and the wrapper quietly ceases to exist.
+  * **`DVTM_OUTER_TERM`, and not `DVTM_TERM`.** dvtm already reads `DVTM_TERM`,
+    and that one is the `TERM` given to the windows *inside* dvtm. This is the
+    terminal dvtm paints *out* to. Two different things, one word apart.
+
+It is plain POSIX shell — sh, dash, bash, ksh and zsh all take it.
+
+The wrapper is also a convenient place for `-c`, though that has nothing to do
+with colour:
+
+    env TERM="$DVTM_OUTER_TERM" dvtm -c "${TMPDIR:-/tmp}/dvtm.$$.cmd" "$@"
+
+`-c` creates the command fifo and names it in `DVTM_CMD_FIFO`, which lets a
+program running inside dvtm ask dvtm to do something — open a window, say — by
+writing to that pipe. See `dvtm(1)`.
+
 ### Some characters are displayed like garbage
 
 Check that your locale settings say UTF-8. If they do and it still happens with
