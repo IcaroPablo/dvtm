@@ -518,7 +518,7 @@ static void t_truecolor(void) {
     skip("truecolor: ':' subparameter separator survives to the outer "
          "terminal",
         "libvterm 0.3.3 misparses 38:2::r:g:b (reads 255,20,100). "
-        "vt.c handled it; see README.md under Known.");
+        "vt.c handled it; see README.md under Limitations.");
 
     check("256 palette resolves to rgb", wait_rgb(255, 0, 0, 2000),
         "palette entry 196 did not resolve to rgb(255,0,0)");
@@ -554,7 +554,7 @@ static void t_faint(void) {
     */
     skip("faint: SGR 2 survives to the outer terminal",
         "libvterm 0.3.3 has no faint bit in VTermScreenCellAttrs, so dvtm "
-        "never sees SGR 2; see README.md under Known.");
+        "never sees SGR 2; see README.md under Limitations.");
     reap();
 }
 
