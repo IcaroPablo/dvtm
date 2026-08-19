@@ -12,7 +12,13 @@
  *              matching raw bytes for these rots into false greens.
  *
  * Nothing sleeps. Every wait is on an observable with a deadline; a fixed
- * sleep is how the old testsuite.sh became timing-dependent. */
+ * sleep is how the old testsuite.sh became timing-dependent.
+ *
+ * A green run here is not proof the program works. Three real drawing bugs --
+ * the color pair passed as a short where ncurses wants an int, TERM never set
+ * for children, the cursor never repositioned -- all survived a fully green
+ * suite and were found by running a real shell inside dvtm and reading the
+ * bytes it emitted. After touching drawing code, do that too. */
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>

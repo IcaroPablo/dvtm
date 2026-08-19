@@ -70,6 +70,8 @@ install: all
 		chmod 644 "${DESTDIR}${MANPREFIX}/man1/$$m"; \
 	done
 	@echo installing terminfo description
+# -x keeps the user-defined capabilities. Without it tic silently drops Tc,
+# setrgbf and setrgbb, and every child sees a plain 256-color terminal.
 	@TERMINFO=${TERMINFO} tic -x -s dvtm.info
 
 uninstall:
