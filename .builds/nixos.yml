@@ -1,7 +1,0 @@
-image: nixos/latest
-sources:
-  - https://github.com/martanne/dvtm
-tasks:
-  - build: |
-      cd dvtm
-      nix-shell -p ncurses -p gnumake --run make
