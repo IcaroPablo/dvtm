@@ -72,6 +72,9 @@ uses.
     that only some editors print.
   * Warnings are on by default and the build is clean on every system it has
     been compiled on.
+  * `bstack` and `tstack` were the same fifty lines twice, differing in which
+    edge the master area sits on. They are one layout with two names in
+    `stack.h` now; see *Configuring* if you have your own `config.h`.
   * Every file parses on its own. `config.h` and the layouts used to be
     fragments that only made sense pasted into `dvtm.c`; they now include
     `dvtm.h`, which carries the declarations they need, and the layouts are
@@ -287,6 +290,10 @@ If you are bringing a `config.h` over from upstream dvtm, two things changed:
   * Add `#include "dvtm.h"` at the top, and change layout includes from
     `#include "tile.c"` to `#include "tile.h"`. The layouts were renamed to
     match what they are — files that are only ever `#include`d.
+  * Change `#include "bstack.h"` to `#include "stack.h"`. `bstack` and `tstack`
+    were the same fifty lines twice over, differing in which edge the masters
+    sit on, and are now one layout with two names in one file. Both names still
+    work in `layouts[]`; only the include moved.
   * Delete the `#ifdef CONFIG_MOUSE` around `buttons[]`. That compile-time
     switch no longer exists; mouse support is always built in, and is turned
     off at runtime with `ENABLE_MOUSE` in `config.h`, the `-M` flag, or
