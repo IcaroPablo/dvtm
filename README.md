@@ -102,6 +102,9 @@ the same emulator neovim uses, in a third of the code.
   * `make test` runs a suite that drives the real binary on a terminal and
     checks what it paints, including cases for every bug above.
   * Warnings are on by default and the build is clean.
+  * The build finds ncurses even when the package manager keeps it off `PATH`,
+    as Homebrew does. Before, it quietly fell back to the ncurses shipped in
+    macOS and stopped at `alloc_pair`.
   * Installs to `~/.local` by default, so no administrator rights are needed.
 
 **Known problems**
@@ -137,7 +140,8 @@ Dependencies:
 
   * `ncursesw` >= 6.1, built with `--enable-ext-colors` — `alloc_pair()` and the
     extended pair argument of `wcolor_set()` are what 24-bit colour needs. The
-    build asks `ncursesw6-config` where it lives.
+    build asks `ncursesw6-config` where it lives, on `PATH` first and then in
+    the prefixes where a package manager parks a library it keeps off `PATH`.
   * `libvterm` >= 0.3, needed by the test suite.
 
 Build and install:

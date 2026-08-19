@@ -9,7 +9,17 @@ TERMINFO := ${DESTDIR}${PREFIX}/share/terminfo
 # Truecolor needs ncursesw >= 6.1 built with --enable-ext-colors: alloc_pair()
 # and the extended pair argument of wcolor_set(). Ask the library's own *-config
 # first, since the ncurses shipped in macOS is 6.0 and lacks both.
-NCURSES_CONFIG ?= $(shell command -v ncursesw6-config || command -v ncurses6-config || echo false)
+# Look on PATH first, then in the prefixes where a package manager parks a
+# library it deliberately keeps off PATH -- Homebrew's ncurses is keg-only, so
+# without this the build silently falls back to the ncurses in macOS and fails
+# on alloc_pair. Same idea as the libvterm search below: ask the file system.
+NCURSES_CONFIG ?= $(firstword \
+	$(shell command -v ncursesw6-config || command -v ncurses6-config) \
+	$(wildcard \
+		/opt/homebrew/opt/ncurses/bin/ncursesw6-config \
+		/usr/local/opt/ncurses/bin/ncursesw6-config \
+		/opt/local/bin/ncursesw6-config) \
+	false)
 NCURSES_CFLAGS ?= $(shell ${NCURSES_CONFIG} --cflags 2>/dev/null)
 NCURSES_LIBS ?= $(shell ${NCURSES_CONFIG} --libs 2>/dev/null || echo -lncursesw)
 
