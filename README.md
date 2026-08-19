@@ -102,6 +102,9 @@ the same emulator neovim uses, in a third of the code.
   * `make test` runs a suite that drives the real binary on a terminal and
     checks what it paints, including cases for every bug above.
   * Warnings are on by default and the build is clean.
+  * The manual page matches the program again. `Mod-E` and `DVTM_PAGER` were
+    undocumented, `Mod-/` was described as opening an editor when it opens a
+    pager, and the entry for `DVTM_EDITOR` broke off mid-sentence.
   * ncursesw 6.1+ is simply required, so the conditionals that used to stand in
     for other curses libraries are gone. Mouse support is always compiled in
     and switched at runtime, with `ENABLE_MOUSE` in `config.h` or the `-M`

@@ -1,4 +1,4 @@
-.Dd December 27, 2016
+.Dd August 18, 2026
 .Dt DVTM 1
 .Os dvtm VERSION
 .Sh NAME
@@ -33,8 +33,12 @@ console based applications.
 Print version information to standard output and exit.
 .
 .It Fl M
-Toggle default mouse grabbing upon startup. Use this to allow normal mouse operation
-under X.
+Toggle default mouse grabbing upon startup.
+Use this to allow normal mouse operation under X.
+The default is
+.Sy ENABLE_MOUSE
+in
+.Pa config.h .
 .
 .It Fl m Ar modifier
 Set command modifier at runtime.
@@ -169,7 +173,6 @@ Show/hide the status bar.
 Toggle position of the status bar between top and bottom.
 .
 .It Ic Mod-r
-.
 .It Ic Mod-^L
 Redraw whole screen.
 .
@@ -183,8 +186,11 @@ Toggle dvtm mouse grabbing.
 .It Ic Mod-e
 Enter copy mode (see section below for further information).
 .
+.It Ic Mod-E
+Show the scrollback in a pager instead of an editor.
+.
 .It Ic Mod-/
-Enter copy mode and start searching forward (assumes a vi-like editor).
+Show the scrollback in a pager and start searching forward.
 .
 .It Ic Mod-p
 Paste last copied text from copy mode at current cursor position.
@@ -226,10 +232,11 @@ Unfortunately this interferes with the standard X copy and paste mechanism.
 To work around this you need to hold down
 .Ic Shift
 while selecting or pasting text.
-Alternatively you can disable mouse support at compile time, start dvtm with the
+Alternatively start dvtm with the
 .Fl M
-flag or toggle mouse support during runtime with
+flag, or toggle mouse support at runtime with
 .Ic Mod-M .
+Mouse support is always compiled in.
 .
 .Bl -tag -width 8
 .It Ic Button1 click
@@ -254,6 +261,13 @@ opening an editor.
 What the editor writes will be stored in an internal register and can be pasted
 into other clients (via
 .Ic Mod-p ).
+.Pp
+.Ic Mod-E
+and
+.Ic Mod-/
+pipe the same content to
+.Xr dvtm-pager 1
+instead, which only displays it.
 .
 .
 .Sh ENVIRONMENT VARIABLES
@@ -287,9 +301,20 @@ with fallbacks to
 .Ev VISUAL ,
 .Ev EDITOR
 and
-.Xr vi 1
-.Pa config.h
-is used instead.
+.Xr vi 1 .
+.
+.It Ev DVTM_PAGER
+.Ic Mod-E
+and
+.Ic Mod-/
+pipe the same content to
+.Xr dvtm-pager 1 ,
+which reads
+.Ev DVTM_PAGER ,
+then
+.Ev PAGER ,
+then falls back to
+.Xr less 1 .
 .El
 .
 .
@@ -312,6 +337,8 @@ This keeps it fast, secure and simple.
 .Sh SEE ALSO
 .
 .Xr abduco 1 ,
+.Xr dvtm-editor 1 ,
+.Xr dvtm-pager 1 ,
 .Xr dvtm-status 1
 .
 .
