@@ -61,50 +61,75 @@ or use one of the distribution provided
 
 ## Changes from upstream dvtm
 
-This fork tracks [martanne/dvtm](https://github.com/martanne/dvtm). What is
-different so far:
+This fork tracks [martanne/dvtm](https://github.com/martanne/dvtm).
+
+**The big one: the terminal emulator is gone.** `vt.c` was 1972 of dvtm's 3951
+lines — an escape-code parser, a cell grid and a scrollback. The host terminal
+is already an emulator, so every byte a program wrote was parsed here, stored,
+re-serialised and parsed again upstairs: two parsers and two screen models for
+the same byte, and every terminal feature written twice. That half is where the
+defects lived. It now sits on [libvterm](https://www.leonerd.org.uk/code/libvterm/),
+the same emulator neovim uses, in a third of the code.
+
+    upstream   dvtm.c 1979 + vt.c 1972          = 3951 lines
+    here       dvtm.c 2016 + term.c/ui.c/hdr    = 2995 lines
 
 **Fixed**
 
   * dvtm froze completely the first time any signal woke it. The pipe it uses
     to wake its own main loop was drained with a loop that never stops on an
-    empty pipe, so dvtm stopped responding to the keyboard and to every window.
+    empty pipe, so it stopped responding to the keyboard and to every window.
   * Keystrokes were lost when they arrived together — typing quickly, pasting,
     or any key combination sent in one go. Only the first key of each batch was
-    read; the rest waited for unrelated input that might never come.
+    read.
   * A window whose program had exited stayed on screen forever on macOS and the
-    BSDs. Neither of the two ways dvtm detects this worked there: the exit
-    signal was blocked and never delivered, and a closed terminal was mistaken
-    for an ordinary empty read.
+    BSDs. Neither of the two ways dvtm detects this worked there.
+  * `make install` could leave a binary that was killed the instant it ran, with
+    no output and no error, because it overwrote executables in place.
   * 24-bit colour was not supported.
-  * The `:` separator in colour escape sequences was not understood, so
-    programs using the standard form got the wrong colours.
-  * `DSR 5`, a program asking the terminal whether it is alive, went
-    unanswered.
+  * `DSR 5`, a program asking whether the terminal is alive, went unanswered.
+  * Programs inside dvtm were run with no `TERM` set at one point during the
+    port; they now always get a working terminfo entry.
 
 **Improved**
 
   * Builds and runs on macOS, using ncursesw 6.1+ rather than the 6.0 the
-    system ships.
-  * The terminfo description installs with its user-defined capabilities
-    intact, so programs inside dvtm see the 24-bit colour support.
-  * `make test` runs a test suite that drives the real binary on a terminal and
-    checks what it paints. See below.
+    system ships. AIX, SunOS and Cygwin support was dropped — it was the source
+    of most of the per-platform conditionals, of which there are now none.
+  * `forkpty(3)`, which is not POSIX and lives in a different header on every
+    system, is gone; the pty is opened with POSIX calls. Two hand-written
+    replacements for platforms that lacked it were deleted with it.
+  * `make test` runs a suite that drives the real binary on a terminal and
+    checks what it paints, including cases for every bug above.
+  * Warnings are on by default and the build is clean.
   * Installs to `~/.local` by default, so no administrator rights are needed.
-  * Dependencies are discovered by asking the libraries, not by naming
-    operating systems in the build.
 
-**Known**
+**Known problems**
 
   * `OSC 11`, a program asking for the background colour, is unanswered.
-    libvterm does not answer it either -- it cannot know the real terminal's
-    colours -- so this has to be implemented here if it is wanted.
-  * Colours written in the `38:2::r:g:b` form are read wrongly. That is the
+    libvterm does not answer it either — it cannot know the real terminal's
+    colours — so it has to be implemented here if it is wanted.
+  * Colours written as `38:2::r:g:b` are read wrongly. That is the
     standards-conformant spelling, with an empty colourspace field, and
     libvterm 0.3.3 drops the empty field and shifts the values. Programs that
     ask terminfo how to set a colour are unaffected, because the terminfo
-    installed here uses the `38;2;r;g;b` form; only programs that hardcode the
-    other spelling see wrong colours.
+    installed here uses `38;2;r;g;b`; only programs that hardcode the other
+    spelling see wrong colours. `make test` reports this as a skipped check on
+    every run.
+  * `config.h` and the layout files (`tile.c`, `grid.c`, …) are `#include`d
+    into `dvtm.c` and use types it declares above the include site, so opened
+    on their own they do not compile. Harmless to the build; confusing to read
+    and to any editor.
+
+**Still to do**
+
+  * Collapse what is left of the `vt_*` interface, now that the engine behind
+    it has been replaced, and rename it to match what it actually is.
+  * Remove the remaining ncurses-version conditionals; ncursesw 6.1+ is the
+    only supported curses.
+  * Make each file compile on its own, which is the `config.h` problem above.
+  * Build on a Unix outside the three that get tested here, to check that
+    "portable to any Unix with the dependencies" is true rather than claimed.
 
 ## Building and testing
 
