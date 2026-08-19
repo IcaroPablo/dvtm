@@ -112,7 +112,8 @@ uses.
     ask terminfo how to set a colour are unaffected, because the terminfo
     installed here uses `38;2;r;g;b`; only programs that hardcode the other
     spelling see wrong colours. `make test` reports this as a skipped check on
-    every run.
+    every run. There is nothing to upgrade to: 0.3.3 is the newest release that
+    exists, and Debian, Arch, Fedora and Guix all ship it.
   * **`Mod-C` only works on Linux, and says nothing anywhere else.** It is meant
     to open a window in the working directory of the focused one, and copy mode
     is meant to start the editor there too. Both ask `/proc/<pid>/cwd`, which

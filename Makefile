@@ -76,6 +76,11 @@ dist: clean
 # exit 137. Unlinking first means the copy lands on a fresh inode with a fresh
 # signature. Unlinking is also safe for a copy that is currently running: the
 # running process keeps the old inode until it exits.
+#
+# Read that as the theory it is: the crash was real and unlinking cured it, but
+# the mechanism was never reproduced on demand. Overwriting a running executable
+# in place is a hazard on any Unix, so the change stands either way -- but if it
+# ever comes back, do not assume the cause above is understood.
 install: all
 	@mkdir -p ${DESTDIR}${PREFIX}/bin
 	@for b in ${BIN}; do \
