@@ -26,71 +26,71 @@
 #include "term.h"
 
 typedef struct {
-	float mfact;
-	unsigned int nmaster;
-	int history;
-	int w;
-	int h;
-	volatile sig_atomic_t need_resize;
+    float mfact;
+    unsigned int nmaster;
+    int history;
+    int w;
+    int h;
+    volatile sig_atomic_t need_resize;
 } Screen;
 
 typedef struct {
-	const char *symbol;
-	void (*arrange)(void);
+    const char *symbol;
+    void (*arrange)(void);
 } Layout;
 
 typedef struct Client Client;
 struct Client {
-	WINDOW *window;
-	Term *term;
-	Term *editor, *app;
-	int editor_fds[2];
-	volatile sig_atomic_t editor_died;
-	const char *cmd;
-	char title[255];
-	int order;
-	pid_t pid;
-	unsigned short int id;
-	unsigned short int x;
-	unsigned short int y;
-	unsigned short int w;
-	unsigned short int h;
-	bool has_title_line;
-	bool minimized;
-	bool urgent;
-	volatile sig_atomic_t died;
-	Client *next;
-	Client *prev;
-	Client *snext;
-	unsigned int tags;
+    WINDOW *window;
+    Term *term;
+    Term *editor, *app;
+    int editor_fds[2];
+    volatile sig_atomic_t editor_died;
+    const char *cmd;
+    char title[255];
+    int order;
+    pid_t pid;
+    unsigned short int id;
+    unsigned short int x;
+    unsigned short int y;
+    unsigned short int w;
+    unsigned short int h;
+    bool has_title_line;
+    bool minimized;
+    bool urgent;
+    volatile sig_atomic_t died;
+    Client *next;
+    Client *prev;
+    Client *snext;
+    unsigned int tags;
 };
 
 typedef struct {
-	short fg;
-	short bg;
-	short fg256;
-	short bg256;
-	int pair;
+    short fg;
+    short bg;
+    short fg256;
+    short bg256;
+    int pair;
 } Color;
 
 typedef struct {
-	const char *title;
-	attr_t attrs;
-	Color *color;
+    const char *title;
+    attr_t attrs;
+    Color *color;
 } ColorRule;
 
-#define ALT(k)      ((k) + (161 - 'a'))
+#define ALT(k) ((k) + (161 - 'a'))
 /* Undefined first, not guarded: some systems' <curses.h> pulls in a CTRL of
  * its own, and dvtm's key bindings must mean this one. */
 #undef CTRL
-#define CTRL(k)     ((k) & 0x1F)
+#define CTRL(k) ((k) & 0x1F)
 #define CTRL_ALT(k) ((k) + (129 - 'a'))
 
 #define MAX_ARGS 8
 
 typedef struct {
-	void (*cmd)(const char *args[]);
-	const char *args[3];
+    void (*cmd)(const char *args[]);
+    const char *args[3];
 } Action;
 
 #define MAX_KEYS 3
@@ -98,55 +98,55 @@ typedef struct {
 typedef unsigned int KeyCombo[MAX_KEYS];
 
 typedef struct {
-	KeyCombo keys;
-	Action action;
+    KeyCombo keys;
+    Action action;
 } KeyBinding;
 
 typedef struct {
-	mmask_t mask;
-	Action action;
+    mmask_t mask;
+    Action action;
 } Button;
 
 typedef struct {
-	const char *name;
-	Action action;
+    const char *name;
+    Action action;
 } Cmd;
 
 enum { BAR_TOP, BAR_BOTTOM, BAR_OFF };
 
 typedef struct {
-	int fd;
-	int pos, lastpos;
-	bool autohide;
-	unsigned short int h;
-	unsigned short int y;
-	char text[512];
-	const char *file;
+    int fd;
+    int pos, lastpos;
+    bool autohide;
+    unsigned short int h;
+    unsigned short int y;
+    char text[512];
+    const char *file;
 } StatusBar;
 
 typedef struct {
-	int fd;
-	const char *file;
-	unsigned short int id;
+    int fd;
+    const char *file;
+    unsigned short int id;
 } CmdFifo;
 
 typedef struct {
-	char *data;
-	size_t len;
-	size_t size;
+    char *data;
+    size_t len;
+    size_t size;
 } Register;
 
 typedef struct {
-	char *name;
-	const char *argv[4];
-	bool filter;
-	bool color;
+    char *name;
+    const char *argv[4];
+    bool filter;
+    bool color;
 } Editor;
 
 #define LENGTH(arr) (sizeof(arr) / sizeof((arr)[0]))
-#define MAX(x, y)   ((x) > (y) ? (x) : (y))
-#define MIN(x, y)   ((x) < (y) ? (x) : (y))
-#define TAGMASK     ((1 << LENGTH(tags)) - 1)
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+#define TAGMASK ((1 << LENGTH(tags)) - 1)
 
 static void eprint(const char *errstr, ...);
 
@@ -154,9 +154,9 @@ static void eprint(const char *errstr, ...);
  * event loop on stderr. Redirect it -- the messages land on the terminal dvtm
  * is drawing on. `args...` would be a GCC extension; __VA_ARGS__ is C99. */
 #ifdef NDEBUG
- #define debug(...) ((void)0)
+#define debug(...) ((void)0)
 #else
- #define debug(...) eprint(__VA_ARGS__)
+#define debug(...) eprint(__VA_ARGS__)
 #endif
 
 /* commands for use by keybindings */
@@ -202,7 +202,7 @@ static void mouse_minimize(const char *args[]);
 static void mouse_zoom(const char *args[]);
 
 /* functions and variables available to layouts via config.h */
-static Client* nextvisible(Client *c);
+static Client *nextvisible(Client *c);
 static void focus(Client *c);
 static void resize(Client *c, int x, int y, int w, int h);
 extern Screen screen;

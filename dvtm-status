@@ -5,8 +5,8 @@ FIFO="/tmp/dvtm-status.$$"
 [ -p "$FIFO" ] || mkfifo -m 600 "$FIFO" || exit 1
 
 while true; do
-	date +%H:%M
-	sleep 60
+    date +%H:%M
+    sleep 60
 done > "$FIFO" &
 
 STATUS_PID=$!

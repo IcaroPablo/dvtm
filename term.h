@@ -35,8 +35,8 @@ typedef void (*TermUrgentHandler)(Term *);
 /* One line that has scrolled off the top. libvterm gives us the cells and
  * forgets them; if we want scrollback we have to keep them ourselves. */
 typedef struct {
-	int cols;
-	VTermScreenCell *cells;
+    int cols;
+    VTermScreenCell *cells;
 } Line;
 
 /* One child: its pty, the libvterm instance parsing what it writes, and the
@@ -48,43 +48,43 @@ typedef struct {
  * something.
  */
 struct Term {
-	VTerm *vt;
-	VTermScreen *screen;
-	VTermState *state;
+    VTerm *vt;
+    VTermScreen *screen;
+    VTermState *state;
 
-	int rows, cols;
-	int pty;
-	pid_t pid;
-	void *data;           /* whatever the caller wants to find again */
+    int rows, cols;
+    int pty;
+    pid_t pid;
+    void *data; /* whatever the caller wants to find again */
 
-	TermTitleHandler title_handler;
-	TermUrgentHandler urgent_handler;
-	char title[256];
+    TermTitleHandler title_handler;
+    TermUrgentHandler urgent_handler;
+    char title[256];
 
-	bool cursor_visible;
-	VTermPos cursor;
-	bool dirty;
+    bool cursor_visible;
+    VTermPos cursor;
+    bool dirty;
 
-	/* scrollback ring; oldest at `first`, `count` entries in use */
-	Line *sb;
-	int sb_size, sb_count, sb_first;
-	int scroll;           /* lines scrolled back; 0 means live screen */
+    /* scrollback ring; oldest at `first`, `count` entries in use */
+    Line *sb;
+    int sb_size, sb_count, sb_first;
+    int scroll; /* lines scrolled back; 0 means live screen */
 
-	attr_t defattrs;      /* what this window's colour rule asks for */
-	int32_t deffg, defbg;
+    attr_t defattrs; /* what this window's colour rule asks for */
+    int32_t deffg, defbg;
 
-	int srow, scol;       /* where this terminal was last painted */
+    int srow, scol; /* where this terminal was last painted */
 };
 
 /* Once, after curses is up: colours, the character set, and the TERM children
  * are run with. `keytable` is the escape-sequence overlay from config.h. */
-void term_init(char const * const keytable[], int count);
+void term_init(char const *const keytable[], int count);
 
 Term *term_create(int rows, int cols, int scroll_buf_sz);
 void term_destroy(Term *);
 void term_resize(Term *, int rows, int cols);
 pid_t term_forkpty(Term *, const char *p, const char *argv[], const char *cwd,
-                   const char *env[], int *to, int *from);
+    const char *env[], int *to, int *from);
 
 int term_process(Term *);
 ssize_t term_write(Term *, const char *buf, size_t len);
@@ -107,7 +107,7 @@ int term_color_get(Term *, int32_t fg, int32_t bg);
 extern int32_t default_fg, default_bg;
 extern bool has_default_colors;
 
-Line *term_sb_at(Term *, int n);     /* nth scrollback line, oldest first */
+Line *term_sb_at(Term *, int n); /* nth scrollback line, oldest first */
 void term_noscroll(Term *);
 void ui_init_colors(void);
 
