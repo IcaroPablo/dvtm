@@ -159,10 +159,13 @@ typedef struct {
 #define MIN(x, y)   ((x) < (y) ? (x) : (y))
 #define TAGMASK     ((1 << LENGTH(tags)) - 1)
 
+/* The one build-time knob left, and a standard one: a debug build traces the
+ * event loop on stderr. Redirect it -- the messages land on the terminal dvtm
+ * is drawing on. `args...` would be a GCC extension; __VA_ARGS__ is C99. */
 #ifdef NDEBUG
- #define debug(format, args...)
+ #define debug(...) ((void)0)
 #else
- #define debug eprint
+ #define debug(...) eprint(__VA_ARGS__)
 #endif
 
 /* commands for use by keybindings */
