@@ -96,6 +96,15 @@ uses.
     installed here uses `38;2;r;g;b`; only programs that hardcode the other
     spelling see wrong colours. `make test` reports this as a skipped check on
     every run.
+  * **`Mod-C` only works on Linux, and says nothing anywhere else.** It is meant
+    to open a window in the working directory of the focused one, and copy mode
+    is meant to start the editor there too. Both ask `/proc/<pid>/cwd`, which
+    exists on Linux and nowhere else; the lookup returns nothing, and both fall
+    back to dvtm's own directory. So on macOS and the BSDs `Mod-C` is `Mod-c`.
+    Reading another process's working directory has no portable answer:
+    `libproc` on one system, `sysctl` on another, nothing at all on a third —
+    per-operating-system code, which is what this fork spent its time removing.
+    Left as it is, and written down here rather than discovered.
 
 **Still to do**
 
@@ -122,11 +131,45 @@ Dependencies:
   * `libvterm` >= 0.3. It parses everything the programs inside dvtm write.
   * `tic`, from that same ncurses, to compile `dvtm.info` at install time.
 
-Nothing else, and nothing platform-specific: no `#ifdef` in the source names an
-operating system, and no `-l` flag is there for one libc. Any Unix providing
-those five should build it. There is deliberately no list of supported systems
-— such a list goes stale, and keeping one true is what invites back the
-conditionals this fork spent its time deleting.
+Nothing else. No `#ifdef` in the source names an operating system, and no `-l`
+flag is there for one libc. Any Unix providing those five should build it.
+There is deliberately no list of supported systems — such a list goes stale, and
+keeping one true is what invites back the conditionals this fork spent its time
+deleting.
+
+### What here is not POSIX
+
+Everything below is either a declared dependency or something every Unix has had
+for decades, with one exception that is a real limitation. Listing them beats
+letting someone find out on a machine where one is missing.
+
+  * **GNU make**, for the library search in `config.mk`, as above.
+  * **curses**, all of it. POSIX does not standardise curses — that is X/Open
+    Curses, a separate standard — and dvtm goes past even that: `alloc_pair`,
+    `use_default_colors`, `A_ITALIC`, the extended-pair form of `wcolor_set`,
+    `set_escdelay`, `resizeterm`, `wresize`, `mousemask` and `getmouse` are
+    ncurses extensions. This is why ncursesw is required by version rather than
+    "some curses".
+  * **libvterm**, obviously.
+  * **`ioctl` with `TIOCGWINSZ`, `TIOCSWINSZ` and `TIOCSCTTY`.** POSIX had no
+    window-size call at all until its 2024 revision, and still has no way to
+    claim a controlling terminal. Every Unix spells these the same; the standard
+    simply never covered them.
+  * **`SIGWINCH`**, which POSIX does not define either, and which every Unix has.
+  * **`Tc`, `setrgbf` and `setrgbb` in `dvtm.info`** — user-defined terminfo
+    capabilities, which is why `make install` runs `tic -x`. Without the `-x`
+    they are silently dropped and the windows lose 24-bit colour.
+  * **`/proc/<pid>/cwd`**, which is Linux and only Linux. This is the exception:
+    it is a limitation rather than a dependency, and it is under *Known
+    problems* above.
+
+What is *not* on that list is worth saying too, because it was checked rather
+than assumed: the C is C99 and compiles silently under `-pedantic` on both clang
+and gcc; no glibc or BSD libc extension is used anywhere — `memmem` appears once,
+in a comment in `tests/run.c` explaining why the suite hand-rolls the search
+instead; and `dvtm-status`, `dvtm-pager` and `tests/editor` are `/bin/sh` with no
+bashisms in them.
+
 
 Then:
 
