@@ -274,8 +274,7 @@ tags: the current view shows every window carrying one of the active tags.
 
 Started with `dvtm -s fifo`, dvtm reads status messages from a named pipe and
 displays them. The
-[`dvtm-status`](https://raw.githubusercontent.com/martanne/dvtm/master/dvtm-status)
-script is provided as an example; it shows the current time. `MOD+s` hides and
+`scripts/dvtm-status` is provided as an example; it shows the current time. `MOD+s` hides and
 shows the bar, `MOD+S` moves it between the top and the bottom.
 
 ### Copy mode
@@ -506,6 +505,23 @@ about 3100 lines of C, small enough to read in an afternoon and hack on.
 
 ## Development
 
+Where things are:
+
+    Makefile  config.mk       the build
+    config.def.h              what you edit, copied to config.h on first build
+    dvtm.info                 the terminfo description installed for the windows
+    src/                      dvtm.c, term.c, ui.c and their headers
+    src/layouts/              one file per way of arranging windows
+    scripts/                  dvtm-editor, dvtm-pager, dvtm-status: installed,
+                              never compiled
+    man/                      the three manual pages
+    tests/                    the suite `make test` runs
+
+Sources are under `src/` and the compiler is told about it with `-I`, so
+`#include "dvtm.h"` and `#include "tile.h"` still resolve — those exact lines
+live in every custom `config.h` and moving the files was not a reason to break
+them.
+
 The house style is in `.clang-format`, and `make format` applies it. Braces on
 the same line, four spaces to indent, no tab characters, eighty columns. Two things opt out on purpose: comments are never
 rewrapped, because they are hand-wrapped prose whose paragraphs a formatter
@@ -523,4 +539,5 @@ Upstream is at [Github](https://github.com/martanne/dvtm) and
 
 dvtm reuses some code of dwm and is released under the same
 [MIT/X11 license](https://raw.githubusercontent.com/martanne/dvtm/master/LICENSE).
-`term.h` and `dvtm-editor.c` carry ISC notices from the code they came from.
+`src/term.h` and `scripts/dvtm-editor` carry ISC notices from the code they
+came from.

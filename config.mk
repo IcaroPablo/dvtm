@@ -44,7 +44,10 @@ VTERM_PREFIX := $(patsubst %/include/vterm.h,%,$(firstword $(wildcard \
 VTERM_CFLAGS ?= $(if ${VTERM_PREFIX},-I${VTERM_PREFIX}/include)
 VTERM_LIBS ?= $(if ${VTERM_PREFIX},-L${VTERM_PREFIX}/lib )-lvterm
 
-INCS = -I. ${NCURSES_CFLAGS} ${VTERM_CFLAGS}
+# -I. finds config.h, which is generated in the root beside config.def.h; the
+# other two let the includes stay written as `dvtm.h` and `tile.h`. Those exact
+# lines live in every custom config.h, so moving the files must not move them.
+INCS = -I. -Isrc -Isrc/layouts ${NCURSES_CFLAGS} ${VTERM_CFLAGS}
 # -lutil is gone with forkpty(3): it was the only thing here that needed it,
 # and -lc with it -- every compiler links the C library on its own.
 LIBS = ${NCURSES_LIBS} ${VTERM_LIBS}

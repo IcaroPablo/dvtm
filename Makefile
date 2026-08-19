@@ -3,10 +3,11 @@
 # system whose `make` is the BSD one, build with `gmake`.
 include config.mk
 
-SRC = dvtm.c term.c ui.c
-HDR = dvtm.h term.h tile.h grid.h stack.h fullscreen.h vstack.h fibonacci.h
-BIN = dvtm dvtm-status dvtm-editor dvtm-pager
-MANUALS = dvtm.1 dvtm-editor.1 dvtm-pager.1
+SRC = src/dvtm.c src/term.c src/ui.c
+HDR = src/dvtm.h src/term.h $(wildcard src/layouts/*.h)
+# dvtm is built here; the other three are scripts and are installed as they are.
+BIN = dvtm scripts/dvtm-status scripts/dvtm-editor scripts/dvtm-pager
+MANUALS = man/dvtm.1 man/dvtm-editor.1 man/dvtm-pager.1
 
 VERSION = $(shell git describe --always --dirty 2>/dev/null || echo "0.15-git")
 DVTM_CFLAGS += -DVERSION=\"${VERSION}\"
@@ -21,7 +22,7 @@ all: dvtm
 config.h:
 	cp config.def.h config.h
 
-dvtm: config.h config.mk *.c *.h
+dvtm: config.h config.mk config.def.h ${SRC} ${HDR}
 	${CC} ${DVTM_CFLAGS} ${SRC} ${LDFLAGS} ${LIBS} -o $@
 
 # clang-format is not reliably on PATH: macOS keeps it inside the Command Line
@@ -78,16 +79,18 @@ dist: clean
 install: all
 	@mkdir -p ${DESTDIR}${PREFIX}/bin
 	@for b in ${BIN}; do \
-		echo "installing ${DESTDIR}${PREFIX}/bin/$$b"; \
-		rm -f "${DESTDIR}${PREFIX}/bin/$$b" && \
-		cp "$$b" "${DESTDIR}${PREFIX}/bin/$$b" && \
-		chmod 755 "${DESTDIR}${PREFIX}/bin/$$b"; \
+		n=$$(basename "$$b"); \
+		echo "installing ${DESTDIR}${PREFIX}/bin/$$n"; \
+		rm -f "${DESTDIR}${PREFIX}/bin/$$n" && \
+		cp "$$b" "${DESTDIR}${PREFIX}/bin/$$n" && \
+		chmod 755 "${DESTDIR}${PREFIX}/bin/$$n"; \
 	done
 	@echo installing manual page to ${DESTDIR}${MANPREFIX}/man1
 	@mkdir -p ${DESTDIR}${MANPREFIX}/man1
 	@for m in ${MANUALS}; do \
-		sed -e "s/VERSION/${VERSION}/" < "$$m" >  "${DESTDIR}${MANPREFIX}/man1/$$m" && \
-		chmod 644 "${DESTDIR}${MANPREFIX}/man1/$$m"; \
+		n=$$(basename "$$m"); \
+		sed -e "s/VERSION/${VERSION}/" < "$$m" >  "${DESTDIR}${MANPREFIX}/man1/$$n" && \
+		chmod 644 "${DESTDIR}${MANPREFIX}/man1/$$n"; \
 	done
 	@echo installing terminfo description
 # -x keeps the user-defined capabilities. Without it tic silently drops Tc,
@@ -96,8 +99,9 @@ install: all
 
 uninstall:
 	@for b in ${BIN}; do \
-		echo "removing ${DESTDIR}${PREFIX}/bin/$$b"; \
-		rm -f "${DESTDIR}${PREFIX}/bin/$$b"; \
+		n=$$(basename "$$b"); \
+		echo "removing ${DESTDIR}${PREFIX}/bin/$$n"; \
+		rm -f "${DESTDIR}${PREFIX}/bin/$$n"; \
 	done
 	@echo removing manual page from ${DESTDIR}${MANPREFIX}/man1
 	@rm -f ${DESTDIR}${MANPREFIX}/man1/dvtm.1
