@@ -204,6 +204,9 @@ static Action actions[] = {
 	{ create, { NULL } },
 };
 
+/* Escape sequences for curses key codes, indexed by key code. The one entry is
+ * a placeholder: a completely empty initialiser is a compiler extension, not
+ * C99, and the code skips a NULL entry anyway. Add your own below it. */
 static char const * const keytable[] = {
-	/* add your custom key escape sequences */
+	NULL,
 };

@@ -6,7 +6,11 @@ MANUALS = dvtm.1 dvtm-editor.1 dvtm-pager.1
 
 VERSION = $(shell git describe --always --dirty 2>/dev/null || echo "0.15-git")
 DVTM_CFLAGS += -DVERSION=\"${VERSION}\"
-DEBUG_CFLAGS = ${DVTM_CFLAGS} -UNDEBUG -O0 -g
+# -pedantic here and not in the normal build: the tree is meant to be plain C99
+# so that it is not tied to one compiler, and this is what says so out loud.
+# Keeping it out of the normal build means a strict-mode complaint from some
+# system header can never stop a user from compiling dvtm.
+DEBUG_CFLAGS = ${DVTM_CFLAGS} -UNDEBUG -O0 -g -pedantic
 
 all: dvtm dvtm-editor
 

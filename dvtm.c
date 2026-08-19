@@ -79,7 +79,7 @@ error(const char *errstr, ...) {
 }
 
 static bool
-isarrange(void (*func)()) {
+isarrange(void (*func)(void)) {
 	return func == layout->arrange;
 }
 
@@ -644,7 +644,7 @@ bitoftag(const char *tag) {
 }
 
 static void
-tagschanged() {
+tagschanged(void) {
 	bool allminimized = true;
 	for (Client *c = nextvisible(clients); c; c = nextvisible(c->next)) {
 		if (!c->minimized) {
@@ -734,9 +734,9 @@ static void
 keypress(int code) {
 	int key = -1;
 	unsigned int len = 1;
-	char buf[8] = { '\e' };
+	char buf[8] = { '\033' };
 
-	if (code == '\e') {
+	if (code == '\033') {
 		/* pass characters following escape to the underlying app */
 		nodelay(stdscr, TRUE);
 		for (int t; len < sizeof(buf) && (t = getch()) != ERR; len++) {
@@ -752,7 +752,7 @@ keypress(int code) {
 	for (Client *c = runinall ? nextvisible(clients) : sel; c; c = nextvisible(c->next)) {
 		if (is_content_visible(c)) {
 			c->urgent = false;
-			if (code == '\e')
+			if (code == '\033')
 				term_write(c->term, buf, len);
 			else
 				term_keypress(c->term, code);
