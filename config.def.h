@@ -7,6 +7,7 @@
  * A_BLINK         Blinking
  * A_DIM           Half bright
  * A_BOLD          Extra bright or bold
+ * A_ITALIC        Italic
  * A_PROTECT       Protected mode
  * A_INVIS         Invisible or blank mode
  */
@@ -60,6 +61,9 @@ const char tags[][8] = { "1", "2", "3", "4", "5" };
 #include "grid.c"
 #include "bstack.c"
 #include "fullscreen.c"
+/* Also in the source tree, and not enabled here: vstack.c (vstack), tstack.c
+ * (tstack) and fibonacci.c (spiral, dwindle). Include the file and add a line
+ * to layouts[] to use one. */
 
 /* by default the first layout entry is used */
 static Layout layouts[] = {
