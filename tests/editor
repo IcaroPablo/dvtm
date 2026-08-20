@@ -17,6 +17,11 @@
 #          text is already on screen, with no sleep to tune.
 #   edit   save something new and leave: dvtm must paste it
 #   keep   leave without touching the file: dvtm must paste nothing
+#   resave rewrite the file with the same content, which is what `:w` on an
+#          unedited buffer does: dvtm must still paste nothing. Not the same
+#          path as keep -- the file is written, so its modification time moves
+#          and only the content says it is unchanged. The C original compared
+#          st_mtime and would have pasted here.
 #   fail   save something new and then fail: dvtm must still paste nothing,
 #          which is the only case that tells the exit status apart from the
 #          content check
@@ -30,6 +35,7 @@ for f in "$@"; do :; done
 case ${EDITOR_MODE:-show} in
 edit) printf 'PASTEME\n' > "$f" ;;
 keep) ;;
+resave) cp "$f" "$f.same" && mv "$f.same" "$f" ;;
 fail) printf 'PASTEME\n' > "$f"; exit 3 ;;
 *)    grep -v '^[ 	]*$' "$f"
       printf 'EDITORSTARTED\n'

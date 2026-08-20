@@ -1238,7 +1238,9 @@ static void copymode_paste(const char *mode, bool expect_paste) {
         char name[96], why[200];
         int now = screen_count("COPYSRC");
         snprintf(name, sizeof name, "nothing is pasted when the editor %s",
-            !strcmp(mode, "keep") ? "changes nothing" : "fails");
+            !strcmp(mode, "keep")     ? "changes nothing"
+            : !strcmp(mode, "resave") ? "saves the text unchanged"
+                                      : "fails");
         snprintf(why, sizeof why,
             "the %s editor must leave the register empty; the "
             "window got "
@@ -1325,6 +1327,10 @@ static void t_copymode_paste(void) {
 }
 static void t_copymode_unchanged(void) {
     copymode_paste("keep", false);
+}
+
+static void t_copymode_resaved(void) {
+    copymode_paste("resave", false);
 }
 static void t_copymode_editor_fails(void) {
     copymode_paste("fail", false);
@@ -1618,6 +1624,7 @@ int main(int argc, char *argv[]) {
     t_copymode();
     t_copymode_paste();
     t_copymode_unchanged();
+    t_copymode_resaved();
     t_copymode_editor_fails();
     t_paste_other_window();
     t_kill_removes_window();
