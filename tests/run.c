@@ -1254,6 +1254,72 @@ static void copymode_paste(const char *mode, bool expect_paste) {
     unsetenv("EDITOR_WITNESS");
 }
 
+/* The register outlives the window it came from: the README's claim is that
+ * what an editor hands back goes into *any* window, and the three cases above
+ * only ever paste back into the one they copied from.
+ *
+ * Which window received it is read the same way focus is, by killing the
+ * focused one and seeing whether the pasted text goes with it. */
+static void t_paste_other_window(void) {
+    static const char *const name =
+        "Mod-p pastes into the focused window, not the one copied from";
+    char witness[512], cwd[256], why[220];
+
+    if (!getcwd(cwd, sizeof cwd))
+        die("getcwd: %s", strerror(errno));
+    snprintf(
+        witness, sizeof witness, "%s/tests/witness.x.%d", cwd, (int)getpid());
+    unlink(witness);
+    setenv("EDITOR_MODE", "edit", 1);
+    setenv("EDITOR_WITNESS", witness, 1);
+
+    start("sh -c cat", "sh -c cat", NULL);
+    if (!wait_ids(2, 6000)) {
+        fail(name, "the two windows never appeared");
+        goto out;
+    }
+    settle(1200);
+
+    tty_write("COPYSRC\n", 8);
+    if (!wait_screen("COPYSRC", 4000)) {
+        fail(name, "the focused window never echoed its input");
+        goto out;
+    }
+    settle(400);
+
+    send_chord("e");
+    if (!wait_file(witness, 8000)) {
+        fail(name, "the editor never ran");
+        goto out;
+    }
+    settle(1500);
+
+    send_chord("2");
+    settle(400);
+    send_chord("p");
+    settle(1500);
+
+    if (!screen_has("PASTEME")) {
+        fail(name, "Mod-p produced nothing in either window");
+        goto out;
+    }
+
+    send_chord("xx");
+    settle(1500);
+    snprintf(why, sizeof why,
+        "killing the window Mod-2 selected should take PASTEME with it and "
+        "leave COPYSRC behind; both going means the paste landed in the "
+        "window it was copied from. PASTEME=%d COPYSRC=%d",
+        screen_has("PASTEME"), screen_has("COPYSRC"));
+    check(name, !screen_has("PASTEME") && screen_has("COPYSRC"), why);
+
+out:
+    reap();
+    unlink(witness);
+    unsetenv("EDITOR_MODE");
+    unsetenv("EDITOR_WITNESS");
+}
+
 static void t_copymode_paste(void) {
     copymode_paste("edit", true);
 }
@@ -1549,6 +1615,7 @@ int main(int argc, char *argv[]) {
     t_copymode_paste();
     t_copymode_unchanged();
     t_copymode_editor_fails();
+    t_paste_other_window();
     t_kill_removes_window();
     t_window_ids();
     t_focus();
