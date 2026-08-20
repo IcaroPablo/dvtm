@@ -1322,6 +1322,58 @@ out:
     unsetenv("EDITOR_WITNESS");
 }
 
+/* A paste larger than the pty will take in one go must not wedge dvtm.
+ *
+ * The child echoes what it is given, so its output fills the master while dvtm
+ * is still writing. A write that insists on finishing blocks there, dvtm stops
+ * reading, the child blocks on its own output and stops reading too, and the
+ * two wait on each other for good. Measured outside dvtm with the same write
+ * loop: it stalls after 1086 bytes on this machine whatever the total is, so
+ * any real scrollback is past it.
+ *
+ * The assertion is that dvtm still answers afterwards, not that the text
+ * arrived: a paste that is slow, or even one the child drops, is not this
+ * bug. */
+static void t_paste_large(void) {
+    static const char *const name =
+        "a paste larger than the pty does not wedge dvtm";
+    char witness[512], cwd[256];
+
+    if (!getcwd(cwd, sizeof cwd))
+        die("getcwd: %s", strerror(errno));
+    snprintf(
+        witness, sizeof witness, "%s/tests/witness.b.%d", cwd, (int)getpid());
+    unlink(witness);
+    setenv("EDITOR_MODE", "big", 1);
+    setenv("EDITOR_BYTES", "32768", 1);
+    setenv("EDITOR_WITNESS", witness, 1);
+
+    start("sh -c cat", NULL, NULL);
+    settle(1200);
+
+    send_chord("e");
+    if (!wait_file(witness, 8000)) {
+        fail(name, "the editor never ran");
+        goto out;
+    }
+    settle(1500);
+
+    send_chord("p");
+    settle(3000);
+
+    send_chord("c");
+    check(name, wait_ids(2, 8000),
+        "after the paste dvtm never opened a second window: it is blocked "
+        "inside its own write to the pty and no longer reads anything");
+
+out:
+    reap();
+    unlink(witness);
+    unsetenv("EDITOR_MODE");
+    unsetenv("EDITOR_BYTES");
+    unsetenv("EDITOR_WITNESS");
+}
+
 static void t_copymode_paste(void) {
     copymode_paste("edit", true);
 }
@@ -1627,6 +1679,7 @@ int main(int argc, char *argv[]) {
     t_copymode_resaved();
     t_copymode_editor_fails();
     t_paste_other_window();
+    t_paste_large();
     t_kill_removes_window();
     t_window_ids();
     t_focus();

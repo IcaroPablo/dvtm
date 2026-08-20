@@ -70,6 +70,18 @@ struct Term {
     int sb_size, sb_count, sb_first;
     int scroll; /* lines scrolled back; 0 means live screen */
 
+    /* Bytes on their way to the child that the pty has not taken yet, held
+     * between `outpos` and `outlen`.
+     *
+     * They are queued rather than pushed in one go because the child echoes
+     * what it is given. A write that insists on finishing blocks inside
+     * write(2) once the pty is full; dvtm then stops reading, the child fills
+     * its own output and blocks too, and the two wait on each other for good.
+     * Measured with the same loop outside dvtm: it stalls after about a
+     * kilobyte, whatever the total is. */
+    char *out;
+    size_t outpos, outlen, outsize;
+
     attr_t defattrs; /* what this window's colour rule asks for */
     int32_t deffg, defbg;
 
@@ -87,7 +99,12 @@ pid_t term_forkpty(Term *, const char *p, const char *argv[], const char *cwd,
     const char *env[], int *to, int *from);
 
 int term_process(Term *);
+/* Hand bytes to the child. Never blocks: what the pty will not take now is
+ * kept, and the main loop selects the pty for writing while term_pending()
+ * says so and calls term_flush() to move what fits. */
 ssize_t term_write(Term *, const char *buf, size_t len);
+bool term_pending(Term *);
+void term_flush(Term *);
 /* A curses key code (KEY_UP, KEY_F(3)...) and one character the user typed.
  * Two entry points because a key code and a code point overlap numerically;
  * see the note above term_keychar(). */

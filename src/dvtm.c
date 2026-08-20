@@ -1660,7 +1660,7 @@ int main(int argc, char *argv[]) {
 
     while (running) {
         int r, nfds = 0;
-        fd_set rd;
+        fd_set rd, wr;
 
         if (screen.need_resize) {
             resize_screen();
@@ -1668,6 +1668,7 @@ int main(int argc, char *argv[]) {
         }
 
         FD_ZERO(&rd);
+        FD_ZERO(&wr);
         watch(STDIN_FILENO, &rd, &nfds);
         watch(sigpipe[0], &rd, &nfds);
         watch(cmdfifo.fd, &rd, &nfds);
@@ -1683,12 +1684,16 @@ int main(int argc, char *argv[]) {
                 continue;
             }
             watch(c->editor ? c->editor->pty : c->app->pty, &rd, &nfds);
+            /* Reading stays unconditional. That is the whole point: the child
+             * only takes more once dvtm has drained what it wrote back. */
+            if (term_pending(c->term))
+                watch(c->term->pty, &wr, &nfds);
             c = c->next;
         }
 
         doupdate();
         sigprocmask(SIG_UNBLOCK, &blockset, NULL);
-        r = select(nfds + 1, &rd, NULL, NULL, NULL);
+        r = select(nfds + 1, &rd, &wr, NULL, NULL);
         sigprocmask(SIG_BLOCK, &blockset, NULL);
 
         if (r < 0) {
@@ -1778,6 +1783,9 @@ int main(int argc, char *argv[]) {
             handle_statusbar();
 
         for (Client *c = clients; c; c = c->next) {
+            if (FD_ISSET(c->term->pty, &wr))
+                term_flush(c->term);
+
             if (FD_ISSET(c->term->pty, &rd)) {
                 if (term_process(c->term) < 0 && errno == EIO) {
                     if (c->editor)

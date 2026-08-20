@@ -245,6 +245,7 @@ void term_destroy(Term *t) {
     for (int i = 0; i < t->sb_count; i++)
         line_free(term_sb_at(t, i));
     free(t->sb);
+    free(t->out);
     if (t->vt)
         vterm_free(t->vt);
     if (t->pty >= 0)
@@ -263,6 +264,12 @@ static pid_t pty_fork(int *master, const struct winsize *ws) {
 
     if ((mfd = posix_openpt(O_RDWR | O_NOCTTY)) < 0)
         return -1;
+    /* The master, and only the master: term_write() must never block, and the
+     * child's own descriptors have to stay as any program expects them. */
+    if (fcntl(mfd, F_SETFL, fcntl(mfd, F_GETFL) | O_NONBLOCK) < 0) {
+        close(mfd);
+        return -1;
+    }
     if (grantpt(mfd) < 0 || unlockpt(mfd) < 0 || !(name = ptsname(mfd))) {
         close(mfd);
         return -1;
@@ -379,20 +386,52 @@ pid_t term_forkpty(Term *t, const char *p, const char *argv[], const char *cwd,
 
 /* ── reading and writing ──────────────────────────────────────────────────── */
 
-ssize_t term_write(Term *t, const char *buf, size_t len) {
-    ssize_t ret = (ssize_t)len;
+bool term_pending(Term *t) {
+    return t && t->outpos < t->outlen;
+}
 
-    while (len > 0) {
-        ssize_t res = write(t->pty, buf, len);
+void term_flush(Term *t) {
+    while (t->outpos < t->outlen) {
+        ssize_t res = write(t->pty, t->out + t->outpos, t->outlen - t->outpos);
         if (res < 0) {
-            if (errno == EAGAIN || errno == EINTR)
+            if (errno == EINTR)
                 continue;
-            return -1;
+            break; /* EAGAIN: the pty is full; the next pass will try again */
         }
-        buf += res;
-        len -= (size_t)res;
+        t->outpos += (size_t)res;
     }
-    return ret;
+    if (t->outpos == t->outlen)
+        t->outpos = t->outlen = 0;
+}
+
+static bool queue(Term *t, const char *buf, size_t len) {
+    /* Compact before growing: a long paste drains from the front, so the room
+     * already consumed is usually enough for what follows. */
+    if (t->outpos > 0) {
+        memmove(t->out, t->out + t->outpos, t->outlen - t->outpos);
+        t->outlen -= t->outpos;
+        t->outpos = 0;
+    }
+    if (t->outlen + len > t->outsize) {
+        size_t want = t->outsize ? t->outsize : 4096;
+        char *p;
+        while (want < t->outlen + len)
+            want *= 2;
+        if (!(p = realloc(t->out, want)))
+            return false;
+        t->out = p;
+        t->outsize = want;
+    }
+    memcpy(t->out + t->outlen, buf, len);
+    t->outlen += len;
+    return true;
+}
+
+ssize_t term_write(Term *t, const char *buf, size_t len) {
+    if (!queue(t, buf, len))
+        return -1;
+    term_flush(t);
+    return (ssize_t)len;
 }
 
 /* Send whatever libvterm has queued for the child: key presses and mouse
@@ -414,8 +453,14 @@ int term_process(Term *t) {
         return -1;
     }
     res = read(t->pty, buf, sizeof buf);
-    if (res < 0)
+    if (res < 0) {
+        /* The master is non-blocking, so an empty pty is an ordinary answer
+         * and not the child going away. Reporting it as an error would tear
+         * down a perfectly live window. */
+        if (errno == EAGAIN || errno == EINTR)
+            return 0;
         return -1;
+    }
     /* End of file: the child is gone. Linux reports that as EIO, macOS and
      * the BSDs as a zero-byte read; report it the same way everywhere. */
     if (res == 0) {

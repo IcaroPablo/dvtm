@@ -22,6 +22,7 @@
 #          path as keep -- the file is written, so its modification time moves
 #          and only the content says it is unchanged. The C original compared
 #          st_mtime and would have pasted here.
+#   big    save $EDITOR_BYTES of text, more than a pty will take in one go
 #   fail   save something new and then fail: dvtm must still paste nothing,
 #          which is the only case that tells the exit status apart from the
 #          content check
@@ -36,6 +37,10 @@ case ${EDITOR_MODE:-show} in
 edit) printf 'PASTEME\n' > "$f" ;;
 keep) ;;
 resave) cp "$f" "$f.same" && mv "$f.same" "$f" ;;
+big) awk -v n="${EDITOR_BYTES:-65536}" 'BEGIN {
+         s = ""; while (length(s) < 63) s = s "x"
+         for (i = 0; i * 64 < n; i++) print s
+         print "BIGEND" }' > "$f" ;;
 fail) printf 'PASTEME\n' > "$f"; exit 3 ;;
 *)    grep -v '^[ 	]*$' "$f"
       printf 'EDITORSTARTED\n'
