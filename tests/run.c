@@ -234,6 +234,19 @@ static int screen_count(const char *text) {
     return n;
 }
 
+static int screen_occurrences(const char *text) {
+    char line[COLS + 8];
+    size_t n = strlen(text);
+    int total = 0;
+
+    for (int r = 0; r < ROWS; r++) {
+        screen_row(r, line, sizeof line);
+        for (char *p = line; (p = strstr(p, text)); p += n)
+            total++;
+    }
+    return total;
+}
+
 static bool screen_has(const char *text) {
     char line[COLS + 8];
     for (int r = 0; r < ROWS; r++) {
@@ -794,7 +807,9 @@ static void t_kill_removes_window(void) {
     /* MOD x x kills the focused client. The assertion is that the *window*
      * goes, not that the process died — those are different failures, and the
      * difference is the whole point of the case. */
-    tty_write("\x07xx", 3);
+    tty_write("\x07"
+              "xx",
+        3);
 
     bool one_left = wait_ids(2, 6000);
     after = visible_ids();
@@ -805,6 +820,246 @@ static void t_kill_removes_window(void) {
     check("kill removes exactly one window",
         one_left && (after & before) == after && after != before, why);
     reap();
+}
+
+/* MOD is a control byte, so it cannot be written inline: "\x07f" is one byte,
+ * 0x7f, because a hex escape swallows every hex digit that follows it. */
+static void send_chord(const char *keys) {
+    char buf[8] = { MOD };
+    size_t n = strlen(keys);
+
+    if (n + 1 >= sizeof buf)
+        die("chord too long: %s", keys);
+    memcpy(buf + 1, keys, n);
+    tty_write(buf, n + 1);
+}
+
+/* dvtm prepends new clients, so the last command on the command line is #1 and
+ * the first is #3. */
+#define W1 "CCC"
+#define W2 "BBB"
+#define W3 "AAA"
+
+static bool start_three(const char *name) {
+    start(
+        "tests/probe mark " W3, "tests/probe mark " W2, "tests/probe mark " W1);
+    if (wait_ids(3, 6000))
+        return true;
+    fail(name, "the three windows never all appeared");
+    reap();
+    return false;
+}
+
+static void t_window_ids(void) {
+    char why[200];
+
+    if (!start_three("windows are numbered in the title bar"))
+        return;
+    snprintf(why, sizeof why,
+        "expected the title bars to read '%s | #1', '%s | #2' and '%s | #3'",
+        W1, W2, W3);
+    check("windows are numbered in the title bar",
+        screen_has(W1 " | #1") && screen_has(W2 " | #2") &&
+            screen_has(W3 " | #3"),
+        why);
+    reap();
+}
+
+/* Focus has no text of its own on screen, so each case reads it back by killing
+ * the focused window and naming which marker went. */
+static void t_focus(void) {
+    struct {
+        const char *name, *away, *keys, *dies;
+    } cases[] = {
+        { "Mod-1 focuses the first window", "j", "1", W1 },
+        { "Mod-2 focuses the second window", NULL, "2", W2 },
+        { "Mod-3 focuses the third window", NULL, "3", W3 },
+    };
+
+    for (unsigned i = 0; i < sizeof cases / sizeof *cases; i++) {
+        char why[240];
+
+        if (!start_three(cases[i].name))
+            continue;
+        if (cases[i].away)
+            send_chord(cases[i].away);
+        send_chord(cases[i].keys);
+        settle(400);
+        send_chord("xx");
+        wait_ids(2, 6000);
+        settle(400);
+
+        snprintf(why, sizeof why,
+            "expected %s to be the one killed; on screen now: %s=%d %s=%d "
+            "%s=%d",
+            cases[i].dies, W1, screen_has(W1), W2, screen_has(W2), W3,
+            screen_has(W3));
+        check(cases[i].name, !screen_has(cases[i].dies), why);
+        reap();
+    }
+}
+
+static void t_focus_moves(void) {
+    char why[220];
+
+    if (!start_three("Mod-j moves the focus"))
+        return;
+    send_chord("2");
+    send_chord("j");
+    settle(400);
+    send_chord("xx");
+    wait_ids(2, 6000);
+    settle(400);
+    snprintf(why, sizeof why,
+        "Mod-2 then Mod-j should leave %s focused, and it was not the window "
+        "killed",
+        W3);
+    check("Mod-j moves the focus", !screen_has(W3), why);
+    reap();
+
+    if (!start_three("Mod-k undoes Mod-j"))
+        return;
+    send_chord("2");
+    send_chord("j");
+    send_chord("k");
+    settle(400);
+    send_chord("xx");
+    wait_ids(2, 6000);
+    settle(400);
+    snprintf(why, sizeof why,
+        "Mod-j then Mod-k should return to %s, and it was not the window "
+        "killed",
+        W2);
+    check("Mod-k undoes Mod-j", !screen_has(W2), why);
+    reap();
+}
+
+/* The layout symbol dvtm prints in the bar, right after the tag list. Asserted
+ * as well as the geometry: tile is the layout dvtm starts in, so a geometry
+ * claim alone would pass for a Mod-f that did nothing at all. */
+static void t_layouts(void) {
+    VTermPos a, b;
+    char why[260];
+
+    if (!start_three("Mod-g selects the grid layout"))
+        return;
+
+    send_chord("g");
+    settle(700);
+    check("Mod-g selects the grid layout", screen_has("[5]+++"),
+        "the bar never showed the grid symbol");
+
+    send_chord("f");
+    settle(700);
+    if (screen_find(W1 " | #1", &a) && screen_find(W2 " | #2", &b)) {
+        snprintf(why, sizeof why,
+            "expected the tile symbol in the bar and the master area on the "
+            "left: symbol=%d, #1 col %d, #2 col %d",
+            screen_has("[5][]="), a.col, b.col);
+        check("Mod-f selects tile, master area on the left",
+            screen_has("[5][]=") && a.col < b.col, why);
+    } else {
+        fail("Mod-f selects tile, master area on the left",
+            "could not locate both title bars");
+    }
+
+    send_chord("b");
+    settle(700);
+    check("Mod-b selects the bottom stack layout", screen_has("[5]TTT"),
+        "the bar never showed the bottom stack symbol");
+    if (screen_find(W1 " | #1", &a) && screen_find(W2 " | #2", &b)) {
+        snprintf(why, sizeof why,
+            "the bottom stack puts the master area on top, so #1 must sit "
+            "above #2: #1 row %d, #2 row %d",
+            a.row, b.row);
+        check(
+            "the bottom stack puts the master area on top", a.row < b.row, why);
+    } else {
+        fail("the bottom stack puts the master area on top",
+            "could not locate both title bars");
+    }
+
+    send_chord("m");
+    settle(700);
+    check("Mod-m selects the fullscreen layout", screen_has("[5][ ]"),
+        "the bar never showed the fullscreen symbol");
+    snprintf(why, sizeof why,
+        "fullscreen shows the selected window only: %s=%d %s=%d %s=%d", W1,
+        screen_has(W1), W2, screen_has(W2), W3, screen_has(W3));
+    check("fullscreen shows one window",
+        screen_has(W1) && !screen_has(W2) && !screen_has(W3), why);
+
+    send_chord(" ");
+    settle(700);
+    check("Mod-Space moves to another layout", !screen_has("[5][ ]"),
+        "the layout symbol did not change");
+    reap();
+}
+
+static void t_tags(void) {
+    char why[220];
+
+    start("tests/probe mark " W3, "tests/probe mark " W2, NULL);
+    if (!wait_ids(2, 6000)) {
+        fail("Mod-t tags the focused window", "the two windows never appeared");
+        reap();
+        return;
+    }
+
+    send_chord("t2");
+    send_chord("v2");
+    settle(900);
+    snprintf(why, sizeof why,
+        "the focused window was tagged 2 and tag 2 selected, so only %s "
+        "should show: %s=%d %s=%d",
+        W2, W2, screen_has(W2), W3, screen_has(W3));
+    check("Mod-t tags the focused window", screen_has(W2) && !screen_has(W3),
+        why);
+
+    send_chord("v1");
+    settle(900);
+    snprintf(why, sizeof why,
+        "tag 1 should show the untagged window only: %s=%d %s=%d", W2,
+        screen_has(W2), W3, screen_has(W3));
+    check("Mod-v switches the view", screen_has(W3) && !screen_has(W2), why);
+    reap();
+}
+
+/* Counted with screen_occurrences and not screen_count: two windows side by
+ * side report on the same screen row. */
+static void t_runinall(void) {
+    struct {
+        const char *name, *prefix;
+        int want;
+    } cases[] = {
+        { "typing reaches the focused window only", NULL, 1 },
+        { "Mod-a sends what is typed to every window", "a", 2 },
+    };
+
+    for (unsigned i = 0; i < sizeof cases / sizeof *cases; i++) {
+        char why[220];
+        int got;
+
+        start("tests/probe echo", "tests/probe echo", NULL);
+        if (!wait_ids(2, 6000)) {
+            fail(cases[i].name, "the two windows never appeared");
+            reap();
+            continue;
+        }
+        settle(900);
+
+        if (cases[i].prefix)
+            send_chord(cases[i].prefix);
+        tty_write("k", 1);
+        settle(1500);
+
+        got = screen_occurrences("ECHO=6b");
+        snprintf(why, sizeof why,
+            "expected %d window(s) to report ECHO=6b, %d did", cases[i].want,
+            got);
+        check(cases[i].name, got == cases[i].want, why);
+        reap();
+    }
 }
 
 /* These three cover bugs that were live in term.c while the whole suite was
@@ -1295,6 +1550,12 @@ int main(int argc, char *argv[]) {
     t_copymode_unchanged();
     t_copymode_editor_fails();
     t_kill_removes_window();
+    t_window_ids();
+    t_focus();
+    t_focus_moves();
+    t_layouts();
+    t_tags();
+    t_runinall();
     t_no_dropped_keys();
     t_default_color_is_not_black();
     t_fifos();
