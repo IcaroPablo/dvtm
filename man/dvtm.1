@@ -262,6 +262,16 @@ What the editor writes will be stored in an internal register and can be pasted
 into other clients (via
 .Ic Mod-p ).
 .Pp
+The text is handed over when the editor exits, not when it saves:
+.Xr dvtm-editor 1
+is a filter, and what it leaves behind is only read once it is gone.
+Saving and switching windows with the editor still open is therefore not enough,
+and
+.Ic Mod-p
+will still paste whatever was copied before it.
+That is also what happens when an editor quits without saving: the previous
+copy stays where it was rather than being lost.
+.Pp
 .Ic Mod-E
 and
 .Ic Mod-/

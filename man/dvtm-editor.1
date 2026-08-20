@@ -22,11 +22,21 @@ terminal multiplexer to implement its copy mode. It reads the standard input and
 file, then opens an editor according to the
 .Sx "ENVIRONMENT VARIABLES" .
 .Pp
-If the invoked editor terminates with a non-zero exit status or
-the file comes back with its content unchanged,
+If the invoked editor terminates with a non-zero exit status, or never saved the
+file,
 .Nm
-does not output anything.  Otherwise, it outputs the content of the modified temporary
+does not output anything.  Otherwise, it outputs the content of the temporary
 file to stdout.
+.Pp
+Saving is the question asked, and not whether the text differs: saving the
+buffer exactly as it arrived is an ordinary thing to want, and a content
+comparison cannot tell that apart from quitting without saving.
+.Pp
+Nothing is output before the editor exits.
+.Nm
+reads the file back once the editor has returned, so
+.Xr dvtm 1
+has nothing to paste while the editor is still open.
 .Pp
 All command line arguments are forwarded verbatim.
 .Xr dvtm 1
