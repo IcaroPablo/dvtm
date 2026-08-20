@@ -1582,18 +1582,22 @@ int main(int argc, char *argv[]) {
         setenv("DVTM_EDITOR", ed, 1);
     }
 
-    /* Put the build directory first on PATH, so copy mode runs the dvtm-editor
-     * that was just built. Without this the suite finds whichever one is
-     * installed -- testing the last release instead of this tree -- and on a
-     * machine with none installed the copy mode check fails with
-     * `execv() failed`, which reads like a dvtm bug and is not one. */
+    /* Put this tree first on PATH, so copy mode runs the dvtm-editor in it.
+     * Without this the suite finds whichever one is installed -- testing the
+     * last release instead of this tree -- and on a machine with none
+     * installed the copy mode check fails with `execv() failed`, which reads
+     * like a dvtm bug and is not one.
+     *
+     * scripts/ as well as the root: the scripts moved there and the root alone
+     * silently went back to testing the installed copy. Verified by breaking
+     * scripts/dvtm-editor and watching the suite stay green. */
     {
         char path[4096], cwd[1024];
         const char *old = getenv("PATH");
         if (!getcwd(cwd, sizeof cwd))
             die("getcwd: %s", strerror(errno));
-        snprintf(
-            path, sizeof path, "%s%s%s", cwd, old ? ":" : "", old ? old : "");
+        snprintf(path, sizeof path, "%s/scripts:%s%s%s", cwd, cwd,
+            old ? ":" : "", old ? old : "");
         setenv("PATH", path, 1);
     }
     signal(SIGPIPE, SIG_IGN);
