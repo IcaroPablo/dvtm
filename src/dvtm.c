@@ -972,6 +972,8 @@ static void copymode(const char *args[]) {
     }
 
     sel->term = sel->editor;
+    if (sel->editor_fds[1] != -1)
+        copyreg.len = 0;
 
     if (sel->editor_fds[0] != -1) {
         char *buf = NULL;
@@ -1489,29 +1491,43 @@ static void handle_statusbar(void) {
     }
 }
 
-static void handle_editor(Client *c) {
-    if (!copyreg.data && (copyreg.data = malloc(screen.history)))
-        copyreg.size = screen.history;
-    copyreg.len = 0;
-    while (c->editor_fds[1] != -1 && copyreg.len < copyreg.size) {
-        ssize_t len = read(c->editor_fds[1], copyreg.data + copyreg.len,
-            copyreg.size - copyreg.len);
-        if (len == -1) {
-            if (errno == EINTR)
-                continue;
-            break;
-        }
-        if (len == 0)
-            break;
-        copyreg.len += len;
-        if (copyreg.len == copyreg.size) {
-            copyreg.size *= 2;
-            if (!(copyreg.data = realloc(copyreg.data, copyreg.size))) {
-                copyreg.size = 0;
-                copyreg.len = 0;
-            }
-        }
+/* Take whatever the editor has written so far.
+ *
+ * Called every time the pipe is readable, and not once at the end: the pipe
+ * holds a few dozen kilobytes, so an editor handing back more than that used
+ * to fill it and block. Blocked, it never exited; never having exited, dvtm
+ * never read; and copy mode never finished. Any real scrollback is that long.
+ */
+static void read_editor(Client *c) {
+    ssize_t len;
+
+    if (c->editor_fds[1] == -1)
+        return;
+    if (copyreg.len == copyreg.size) {
+        size_t want = copyreg.size ? copyreg.size * 2 : (size_t)screen.history;
+        char *p = realloc(copyreg.data, want);
+        if (!p)
+            return;
+        copyreg.data = p;
+        copyreg.size = want;
     }
+    len = read(c->editor_fds[1], copyreg.data + copyreg.len,
+        copyreg.size - copyreg.len);
+    if (len > 0) {
+        copyreg.len += (size_t)len;
+        return;
+    }
+    if (len < 0 && errno == EINTR)
+        return;
+    /* Nothing more is coming: either the editor closed its end or the pipe
+     * broke. Either way this side is done with it. */
+    close(c->editor_fds[1]);
+    c->editor_fds[1] = -1;
+}
+
+static void handle_editor(Client *c) {
+    while (c->editor_fds[1] != -1)
+        read_editor(c);
     c->editor_died = false;
     c->editor_fds[1] = -1;
     term_destroy(c->editor);
@@ -1684,6 +1700,8 @@ int main(int argc, char *argv[]) {
                 continue;
             }
             watch(c->editor ? c->editor->pty : c->app->pty, &rd, &nfds);
+            if (c->editor_fds[1] != -1)
+                watch(c->editor_fds[1], &rd, &nfds);
             /* Reading stays unconditional. That is the whole point: the child
              * only takes more once dvtm has drained what it wrote back. */
             if (term_pending(c->term))
@@ -1783,6 +1801,9 @@ int main(int argc, char *argv[]) {
             handle_statusbar();
 
         for (Client *c = clients; c; c = c->next) {
+            if (c->editor_fds[1] != -1 && FD_ISSET(c->editor_fds[1], &rd))
+                read_editor(c);
+
             if (FD_ISSET(c->term->pty, &wr))
                 term_flush(c->term);
 

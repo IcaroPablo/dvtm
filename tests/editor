@@ -40,7 +40,10 @@ resave) cp "$f" "$f.same" && mv "$f.same" "$f" ;;
 big) awk -v n="${EDITOR_BYTES:-65536}" 'BEGIN {
          s = ""; while (length(s) < 63) s = s "x"
          for (i = 0; i * 64 < n; i++) print s
-         print "BIGEND" }' > "$f" ;;
+         print "BIGEND" }' > "$f"
+     # The witness above only says this ran. A check that needs the writing
+     # to be over waits for this one instead.
+     [ -n "$EDITOR_WITNESS" ] && : > "$EDITOR_WITNESS.done" ;;
 fail) printf 'PASTEME\n' > "$f"; exit 3 ;;
 *)    grep -v '^[ 	]*$' "$f"
       printf 'EDITORSTARTED\n'

@@ -1384,6 +1384,60 @@ out:
     unsetenv("EDITOR_WITNESS");
 }
 
+/* An editor may hand back more than a pipe will hold.
+ *
+ * dvtm used to read the editor's answer only once the editor had exited, and
+ * the pipe between them holds a few dozen kilobytes. Anything longer filled
+ * it, the editor blocked writing, so it never exited, so dvtm never read --
+ * copy mode simply never finished and nothing was ever pasted. A scrollback
+ * is easily that long. */
+static void t_copymode_big_answer(void) {
+    static const char *const name = "an answer larger than the pipe is read";
+    char witness[512], done[540], cwd[256];
+
+    if (!getcwd(cwd, sizeof cwd))
+        die("getcwd: %s", strerror(errno));
+    snprintf(
+        witness, sizeof witness, "%s/tests/witness.p.%d", cwd, (int)getpid());
+    unlink(witness);
+    setenv("EDITOR_MODE", "big", 1);
+    setenv("EDITOR_BYTES", "131072", 1);
+    setenv("EDITOR_WITNESS", witness, 1);
+
+    start("sh -c cat", NULL, NULL);
+    settle(1200);
+
+    send_chord("e");
+    if (!wait_file(witness, 8000)) {
+        fail(name, "the editor never ran");
+        goto out;
+    }
+    /* The editor finishing its writing is the thing under test: with nobody
+     * draining the pipe it stops part way and this file never appears. The
+     * witness above only says it started. */
+    snprintf(done, sizeof done, "%s.done", witness);
+    if (!wait_file(done, 20000)) {
+        fail(name, "the editor never finished writing: it is blocked part "
+                   "way, with nobody draining the pipe it writes into");
+        goto out;
+    }
+    settle(1500); /* the editor exits; dvtm returns to the window */
+
+    send_chord("p");
+    check(name, wait_screen("BIGEND", 20000),
+        "the editor's last line never reached the window: copy mode never "
+        "finished, because the editor is still blocked writing into a full "
+        "pipe");
+
+out:
+    reap();
+    unlink(witness);
+    unlink(done);
+    unsetenv("EDITOR_MODE");
+    unsetenv("EDITOR_BYTES");
+    unsetenv("EDITOR_WITNESS");
+}
+
 static void t_copymode_paste(void) {
     copymode_paste("edit", true);
 }
@@ -1685,6 +1739,7 @@ int main(int argc, char *argv[]) {
     t_cursor_follows_child();
     t_copymode();
     t_copymode_paste();
+    t_copymode_big_answer();
     t_copymode_unchanged();
     t_copymode_resaved();
     t_copymode_editor_fails();
