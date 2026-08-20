@@ -1511,6 +1511,89 @@ static void t_copymode_editor_fails(void) {
     copymode_paste("fail", "NOTHING");
 }
 
+/* An editor that saved and is still on screen must leave the previous copy
+ * alone.
+ *
+ * This is the report none of the checks above covered: Mod-e, `:w`, switch
+ * window, Mod-p -- and nothing arrives. Saving is not what hands the text
+ * over; leaving is. dvtm-editor is a filter, and its stdout only closes once
+ * the editor is gone, so while the editor is still up there is nothing new to
+ * paste and there cannot be. That part is the design. What was not the design
+ * is that dvtm emptied the register the moment copy mode started, so Mod-p
+ * answered with silence instead of the last thing that was copied.
+ *
+ * Every other copy mode check quits the editor, which is why they all pass and
+ * this one did not exist.
+ */
+static void t_copymode_editor_still_open(void) {
+    static const char *const name =
+        "an editor still on screen leaves the previous copy alone";
+    char witness[512], one[540], two[540], seq[540], cwd[256], why[220];
+
+    if (!getcwd(cwd, sizeof cwd))
+        die("getcwd: %s", strerror(errno));
+    snprintf(
+        witness, sizeof witness, "%s/tests/witness.s.%d", cwd, (int)getpid());
+    snprintf(seq, sizeof seq, "%s.seq", witness);
+    snprintf(one, sizeof one, "%s.1", witness);
+    snprintf(two, sizeof two, "%s.2", witness);
+    unlink(witness);
+    unlink(seq);
+    unlink(one);
+    unlink(two);
+    setenv("EDITOR_MODE", "stay", 1);
+    setenv("EDITOR_WITNESS", witness, 1);
+    setenv("EDITOR_SEQ", seq, 1);
+
+    start("sh -c cat", "sh -c cat", NULL);
+    if (!wait_ids(2, 6000)) {
+        fail(name, "the two windows never appeared");
+        goto out;
+    }
+    settle(1200);
+
+    /* First run: saves PASTEME and leaves, which is the ordinary path. The
+     * register holds PASTEME from here on, and nothing has been pasted yet, so
+     * the word is not on screen. */
+    send_chord("e");
+    if (!wait_file(one, 8000)) {
+        fail(name, "the editor never ran");
+        goto out;
+    }
+    settle(1500);
+
+    /* Second run: saves SECONDTEXT and stays. This is the editor the report
+     * left sitting there. */
+    send_chord("e");
+    if (!wait_file(two, 8000)) {
+        fail(name, "the second editor never ran");
+        goto out;
+    }
+    settle(1000);
+
+    send_chord("2");
+    settle(400);
+    send_chord("p");
+    settle(1500);
+
+    snprintf(why, sizeof why,
+        "with an editor still up, Mod-p must put back what was copied before "
+        "it started, and never the buffer that editor is holding: "
+        "PASTEME=%d SECONDTEXT=%d",
+        screen_has("PASTEME"), screen_has("SECONDTEXT"));
+    check(name, screen_has("PASTEME") && !screen_has("SECONDTEXT"), why);
+
+out:
+    reap();
+    unlink(witness);
+    unlink(seq);
+    unlink(one);
+    unlink(two);
+    unsetenv("EDITOR_MODE");
+    unsetenv("EDITOR_WITNESS");
+    unsetenv("EDITOR_SEQ");
+}
+
 /* Everything dvtm paints itself -- the tag numbers, the window borders, the
  * titles of unfocused windows -- is COLOR(DEFAULT) in config.h, which is -1/-1:
  * whatever this terminal calls its default foreground and background.
@@ -1802,6 +1885,7 @@ int main(int argc, char *argv[]) {
     t_copymode_unchanged();
     t_copymode_resaved();
     t_copymode_editor_fails();
+    t_copymode_editor_still_open();
     t_paste_other_window();
     t_paste_large();
     t_kill_removes_window();

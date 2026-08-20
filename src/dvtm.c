@@ -852,6 +852,7 @@ static void destroy(Client *c) {
     wnoutrefresh(c->window);
     term_destroy(c->term);
     delwin(c->window);
+    free(c->editreg.data);
     if (!clients && LENGTH(actions)) {
         if (!strcmp(c->cmd, shell))
             quit(NULL);
@@ -972,8 +973,13 @@ static void copymode(const char *args[]) {
     }
 
     sel->term = sel->editor;
+    /* The window's own answer buffer starts empty; the paste register does not
+     * get touched. An editor that hands nothing back -- or that is still
+     * sitting there with the text saved but not yet let go of, which is what
+     * `:w` without `:q` looks like from here -- must leave the last copy
+     * pastable rather than replace it with silence. */
     if (sel->editor_fds[1] != -1)
-        copyreg.len = 0;
+        sel->editreg.len = 0;
 
     if (sel->editor_fds[0] != -1) {
         char *buf = NULL;
@@ -1503,18 +1509,25 @@ static void read_editor(Client *c) {
 
     if (c->editor_fds[1] == -1)
         return;
-    if (copyreg.len == copyreg.size) {
-        size_t want = copyreg.size ? copyreg.size * 2 : (size_t)screen.history;
-        char *p = realloc(copyreg.data, want);
-        if (!p)
+    if (c->editreg.len == c->editreg.size) {
+        size_t want =
+            c->editreg.size ? c->editreg.size * 2 : (size_t)screen.history;
+        char *p = realloc(c->editreg.data, want);
+        if (!p) {
+            /* Nothing can be added and nothing can be read: leave the pipe
+             * alone rather than spin on it. What is already there is still
+             * handed over when the editor exits. */
+            close(c->editor_fds[1]);
+            c->editor_fds[1] = -1;
             return;
-        copyreg.data = p;
-        copyreg.size = want;
+        }
+        c->editreg.data = p;
+        c->editreg.size = want;
     }
-    len = read(c->editor_fds[1], copyreg.data + copyreg.len,
-        copyreg.size - copyreg.len);
+    len = read(c->editor_fds[1], c->editreg.data + c->editreg.len,
+        c->editreg.size - c->editreg.len);
     if (len > 0) {
-        copyreg.len += (size_t)len;
+        c->editreg.len += (size_t)len;
         return;
     }
     if (len < 0 && errno == EINTR)
@@ -1528,6 +1541,17 @@ static void read_editor(Client *c) {
 static void handle_editor(Client *c) {
     while (c->editor_fds[1] != -1)
         read_editor(c);
+    /* The editor is gone, so whatever it wrote is all there is. An empty
+     * answer means it declined -- it quit without saving, or it failed -- and
+     * the register keeps what it had. The buffers are swapped rather than
+     * copied, which also hands the old register's allocation back for the next
+     * editor to grow into. */
+    if (c->editreg.len) {
+        Register t = copyreg;
+        copyreg = c->editreg;
+        c->editreg = t;
+        c->editreg.len = 0;
+    }
     c->editor_died = false;
     c->editor_fds[1] = -1;
     term_destroy(c->editor);

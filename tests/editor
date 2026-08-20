@@ -26,6 +26,12 @@
 #   fail   save something new and then fail: dvtm must still paste nothing,
 #          which is the only case that tells the exit status apart from the
 #          content check
+#   stay   two runs, counted in $EDITOR_SEQ: the first saves PASTEME and
+#          leaves, the second saves SECONDTEXT and never exits. That is an
+#          editor sitting on a saved buffer -- `:w` without `:q` -- and it is
+#          the one shape in which dvtm cannot have been handed anything, since
+#          dvtm-editor only writes once the editor is gone. Each run leaves
+#          $EDITOR_WITNESS.$n behind, so a check can wait for the run it means.
 #
 # $EDITOR_WITNESS, when set, is created before exiting, so a check can tell
 # "the editor ran and decided nothing" from "the editor never ran".
@@ -46,6 +52,19 @@ big) awk -v n="${EDITOR_BYTES:-65536}" 'BEGIN {
      # to be over waits for this one instead.
      [ -n "$EDITOR_WITNESS" ] && : > "$EDITOR_WITNESS.done" ;;
 fail) printf 'PASTEME\n' > "$f"; exit 3 ;;
+stay) n=0
+      [ -f "$EDITOR_SEQ" ] && n=$(cat "$EDITOR_SEQ")
+      n=$((n + 1))
+      printf '%s\n' "$n" > "$EDITOR_SEQ"
+      if [ "$n" -eq 1 ]; then
+          printf 'PASTEME\n' > "$f"
+      else
+          printf 'SECONDTEXT\n' > "$f"
+      fi
+      [ -n "$EDITOR_WITNESS" ] && : > "$EDITOR_WITNESS.$n"
+      # `if`, not `&&`: a false test as the last command would leave a non-zero
+      # status behind, and dvtm-editor reads that as an editor that failed.
+      if [ "$n" -gt 1 ]; then sleep 60; fi ;;
 *)    grep -v '^[ 	]*$' "$f"
       printf 'EDITORSTARTED\n'
       sleep 30 ;;
