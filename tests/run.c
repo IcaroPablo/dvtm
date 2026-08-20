@@ -531,9 +531,14 @@ static void t_truecolor(void) {
     /* Known limitation, not an oversight. libvterm 0.3.3 -- the newest release
      * that exists -- misparses `38:2::r:g:b`, dropping the empty colourspace
      * field ITU-T T.416 requires and reading (255,20,100) for (20,100,250).
-     * vt.c parsed it correctly, so this is a regression, accepted rather than
-     * worked around: dvtm.info tells children to use the ';' form, so every
-     * program that asks terminfo is unaffected.
+     *
+     * Nothing was lost here. vt.c did worse: it split parameters on `;` alone,
+     * so a colon fell through its parser and the digits after it kept piling
+     * into the parameter before, turning the whole colour into one long
+     * number. libvterm at least reads the abbreviated `38:2:r:g:b` correctly.
+     *
+     * Accepted rather than worked around: dvtm.info tells children to use the
+     * ';' form, so every program that asks terminfo is unaffected.
      *
      * The assertion is kept below, commented, so that re-enabling it is a
      * one-line change the day libvterm fixes this. Uncomment it and drop the
@@ -545,8 +550,8 @@ static void t_truecolor(void) {
     */
     skip("truecolor: ':' subparameter separator survives to the outer "
          "terminal",
-        "libvterm 0.3.3 misparses 38:2::r:g:b (reads 255,20,100). "
-        "vt.c handled it; see README.md under Limitations.");
+        "libvterm 0.3.3 misparses 38:2::r:g:b (reads 255,20,100); "
+        "see README.md under Limitations.");
 
     check("256 palette resolves to rgb", wait_rgb(255, 0, 0, 2000),
         "palette entry 196 did not resolve to rgb(255,0,0)");
