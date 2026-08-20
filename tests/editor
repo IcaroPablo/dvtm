@@ -36,7 +36,8 @@ for f in "$@"; do :; done
 case ${EDITOR_MODE:-show} in
 edit) printf 'PASTEME\n' > "$f" ;;
 keep) ;;
-resave) cp "$f" "$f.same" && mv "$f.same" "$f" ;;
+resave) cp "$f" "$f.same" && mv "$f.same" "$f"
+     [ -n "$EDITOR_WITNESS" ] && : > "$EDITOR_WITNESS.done" ;;
 big) awk -v n="${EDITOR_BYTES:-65536}" 'BEGIN {
          s = ""; while (length(s) < 63) s = s "x"
          for (i = 0; i * 64 < n; i++) print s

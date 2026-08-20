@@ -77,10 +77,12 @@ uses.
   * Warnings are on by default and the build is clean on every system it has
     been compiled on.
   * `dvtm-editor` is a shell script rather than 140 lines of C, which is what
-    `dvtm-pager` beside it always was. One behaviour changed with it: it decides
-    "you quit without saving" by comparing the content rather than the
-    modification time, which is what the C compared — `st_mtime` is whole
-    seconds, so a save made inside the same second as the write was missed.
+    `dvtm-pager` beside it always was. It asks the same question the C did —
+    did you save? — without the race the C had: the C compared the file's
+    modification time against the moment it handed the file over, and a
+    modification time is whole seconds, so a save made inside that same second
+    was missed. The script stamps the file decades into the past first, so any
+    save at all moves it forward unmistakably.
   * `bstack` and `tstack` were the same fifty lines twice, differing in which
     edge the master area sits on. They are one layout with two names in
     `stack.h` now.

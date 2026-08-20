@@ -313,6 +313,19 @@ static bool wait_bytes(const char *needle, int ms) {
     return findmem(obuf, olen, needle, strlen(needle)) != NULL;
 }
 
+/* Like wait_bytes, but only over what arrived after a given point, so a check
+ * can ask whether something was written *again*. */
+static bool wait_bytes_from(size_t from, const char *needle, int ms) {
+    size_t n = strlen(needle);
+    long deadline = now_ms() + ms;
+    do {
+        if (olen > from && findmem(obuf + from, olen - from, needle, n))
+            return true;
+        pump(50);
+    } while (now_ms() < deadline);
+    return olen > from && findmem(obuf + from, olen - from, needle, n) != NULL;
+}
+
 static bool wait_screen(const char *text, int ms) {
     long deadline = now_ms() + ms;
     do {
@@ -325,6 +338,16 @@ static bool wait_screen(const char *text, int ms) {
 
 /* The stand-in editor drops a file before it exits, so a check can tell "it ran
  * and decided to write nothing back" from "it never ran at all". */
+static bool wait_screen_gone(const char *text, int ms) {
+    long deadline = now_ms() + ms;
+    do {
+        if (!screen_has(text))
+            return true;
+        pump(50);
+    } while (now_ms() < deadline);
+    return !screen_has(text);
+}
+
 static bool wait_file(const char *path, int ms) {
     struct stat st;
     long deadline = now_ms() + ms;
@@ -1191,8 +1214,12 @@ static void t_copymode(void) {
  * writes them to the window's pty, and tests/probe puts its terminal in raw
  * mode with echo off, so nothing would show.
  */
-static void copymode_paste(const char *mode, bool expect_paste) {
+/* `expect` is what Mod-p must produce: PASTEME for an editor that saved
+ * something new, AGAIN for one that saved the text it was given back
+ * unchanged, NOTHING for one that declined. */
+static void copymode_paste(const char *mode, const char *expect) {
     char witness[512], cwd[256], chord[2];
+    size_t mark;
     int seen;
 
     if (!getcwd(cwd, sizeof cwd))
@@ -1219,6 +1246,7 @@ static void copymode_paste(const char *mode, bool expect_paste) {
     settle(400);
     seen = screen_count("COPYSRC");
 
+    mark = olen;
     chord[0] = MOD;
     chord[1] = 'e';
     tty_write(chord, 2);
@@ -1226,38 +1254,69 @@ static void copymode_paste(const char *mode, bool expect_paste) {
     if (!wait_file(witness, 8000)) {
         char why[128];
         snprintf(why, sizeof why, "the %s editor never ran", mode);
-        fail(expect_paste ? "an edited buffer is pasted back"
-                          : "nothing is pasted when the editor declines",
-            why);
+        fail("copy mode paste", why);
         reap();
         unsetenv("EDITOR_MODE");
         unsetenv("EDITOR_WITNESS");
         return;
     }
-    settle(1500); /* the editor exits; dvtm returns to the window */
+    /* The first witness only says the editor started; the modes that write
+     * leave a second one when the writing is over. */
+    {
+        char done[540];
+        snprintf(done, sizeof done, "%s.done", witness);
+        wait_file(done, 10000);
+        unlink(done);
+    }
+    settle(2000); /* the editor exits; dvtm gives the window back */
 
+    /* Wipe the window before pasting. The register holds the window's own
+     * text, so without this there is no telling a paste from dvtm merely
+     * repainting what was already there -- which is what made this check
+     * disagree with itself run to run. */
+    if (!strcmp(expect, "AGAIN")) {
+        tty_write("\033[2J\033[H\n", 8);
+        if (!wait_screen_gone("COPYSRC", 8000)) {
+            fail("copy mode paste", "the window would not clear");
+            reap();
+            unlink(witness);
+            unsetenv("EDITOR_MODE");
+            unsetenv("EDITOR_WITNESS");
+            return;
+        }
+    }
+
+    mark = olen;
     chord[0] = MOD;
     chord[1] = 'p';
     tty_write(chord, 2);
     settle(1500);
 
-    if (expect_paste)
-        check("an edited buffer is pasted back", screen_has("PASTEME"),
-            "the editor saved PASTEME and Mod-p produced nothing");
-    else {
-        char name[96], why[200];
+    {
+        char name[96], why[220];
         int now = screen_count("COPYSRC");
-        snprintf(name, sizeof name, "nothing is pasted when the editor %s",
-            !strcmp(mode, "keep")     ? "changes nothing"
-            : !strcmp(mode, "resave") ? "saves the text unchanged"
-                                      : "fails");
-        snprintf(why, sizeof why,
-            "the %s editor must leave the register empty; the "
-            "window got "
-            "PASTEME=%d and COPYSRC %d times, having had it %d "
-            "times",
-            mode, screen_has("PASTEME"), now, seen);
-        check(name, !screen_has("PASTEME") && now == seen, why);
+
+        if (!strcmp(expect, "PASTEME")) {
+            check("an edited buffer is pasted back", screen_has("PASTEME"),
+                "the editor saved PASTEME and Mod-p produced nothing");
+        } else if (!strcmp(expect, "AGAIN")) {
+            /* Asserted on what dvtm wrote after Mod-p, not on the screen: the
+             * register is the whole window, blank rows and all, so putting it
+             * back scrolls the old copy off by exactly as much as it adds and
+             * the picture ends up unchanged. */
+            check("saving without editing pastes the text back",
+                wait_screen("COPYSRC", 8000),
+                "the editor saved the text it was handed, so Mod-p must put "
+                "it back, and none of it was written to the window");
+        } else {
+            snprintf(name, sizeof name, "nothing is pasted when the editor %s",
+                !strcmp(mode, "keep") ? "changes nothing" : "fails");
+            snprintf(why, sizeof why,
+                "the %s editor must leave the register alone; the window got "
+                "PASTEME=%d and COPYSRC %d times, having had it %d times",
+                mode, screen_has("PASTEME"), now, seen);
+            check(name, !screen_has("PASTEME") && now == seen, why);
+        }
     }
 
     reap();
@@ -1439,17 +1498,17 @@ out:
 }
 
 static void t_copymode_paste(void) {
-    copymode_paste("edit", true);
+    copymode_paste("edit", "PASTEME");
 }
 static void t_copymode_unchanged(void) {
-    copymode_paste("keep", false);
+    copymode_paste("keep", "NOTHING");
 }
 
 static void t_copymode_resaved(void) {
-    copymode_paste("resave", false);
+    copymode_paste("resave", "AGAIN");
 }
 static void t_copymode_editor_fails(void) {
-    copymode_paste("fail", false);
+    copymode_paste("fail", "NOTHING");
 }
 
 /* Everything dvtm paints itself -- the tag numbers, the window borders, the

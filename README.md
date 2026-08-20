@@ -136,10 +136,12 @@ it finds in `DVTM_CMD_FIFO`.
 
 ### Copy mode
 
-`MOD+e` hands the window's whole scrollback to an editor. Whatever the editor
-writes back is remembered by dvtm and can be pasted into any window with
-`MOD+p` — so the selecting is done in the editor, with whatever search and
-regex it has, instead of in dvtm.
+`MOD+e` hands the window's whole scrollback to an editor. Save, and what you
+saved is remembered by dvtm and can be pasted into any window with `MOD+p` —
+so the selecting is done in the editor, with whatever search and regex it has,
+instead of in dvtm. Cut the buffer down to what you want and save, or save it
+whole; either way you get back what you saved. Quit without saving and nothing
+is taken, so whatever you copied before is still there.
 
 `MOD+E` sends the same text to a pager instead, which only displays it, and
 `MOD+/` opens the pager already searching forward.

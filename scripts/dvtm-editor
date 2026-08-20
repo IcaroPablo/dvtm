@@ -6,13 +6,15 @@
 # should land in the paste register. The editor itself needs a terminal, so it
 # gets /dev/tty and not either of those pipes.
 #
-# Nothing is written back if the editor fails, or if the text comes back
-# unchanged: quitting without saving must not clobber what was copied before.
+# Nothing is written back if the editor fails, or if it never saved: quitting
+# without saving must not clobber what was copied before. Saving is what asks
+# for the text, whether or not anything in it changed.
 #
-# This was 140 lines of C. The one behaviour that changed with it: unchanged is
-# decided by comparing the content, where the C compared st_mtime -- whole
-# seconds, so a save made inside the same second as the write was missed. There
-# is no portable way to read a modification time from a shell anyway.
+# This was 140 lines of C, which asked the same question by comparing the
+# modification time against the moment it handed the file over. That missed a
+# save made inside the same second, because a modification time is only whole
+# seconds. Stamping both files decades into the past first removes the race
+# without changing the question.
 #
 # Reimplemented in POSIX shell from the C original by Dmitry Bogatov and
 # Marc André Tanner, under the same ISC terms.
@@ -20,14 +22,25 @@
 editor=${DVTM_EDITOR:-${VISUAL:-${EDITOR:-vi}}}
 
 tmp=$(mktemp "${TMPDIR:-/tmp}/dvtm-editor.XXXXXX") || exit 1
-trap 'rm -f "$tmp" "$tmp.orig"' EXIT HUP INT TERM
+trap 'rm -f "$tmp" "$tmp.stamp"' EXIT HUP INT TERM
 
 cat > "$tmp" || exit 1
-cp "$tmp" "$tmp.orig" || exit 1
+
+# Both files are stamped far in the past, so that saving moves the buffer
+# forward by decades and there is nothing to miss. Comparing against "now"
+# is what the C original did, and it lost a save made inside the same second
+# as the write, since a modification time is only whole seconds.
+: > "$tmp.stamp" || exit 1
+touch -t 200001010000 "$tmp" "$tmp.stamp" || exit 1
 
 # $editor is deliberately unquoted: DVTM_EDITOR is documented to be able to
 # carry flags, and the C version could not honour that -- it passed the whole
 # string to execvp as one program name.
 $editor "$@" "$tmp" < /dev/tty > /dev/tty 2>&1 || exit 1
 
-cmp -s "$tmp" "$tmp.orig" || cat "$tmp"
+# -newer, and not a content comparison: saving the scrollback exactly as it
+# arrived is a normal thing to want, and comparing the text cannot tell it
+# from quitting without saving. `find` because `test -nt` is not POSIX.
+[ -n "$(find "$tmp" -newer "$tmp.stamp")" ] && cat "$tmp"
+
+exit 0
