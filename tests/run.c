@@ -323,6 +323,21 @@ static bool wait_file(const char *path, int ms) {
     return stat(path, &st) == 0;
 }
 
+/* The inverse of wait_file: waits for something to go away. Pumping while it
+ * waits is not incidental — dvtm writes as it tears the screen down, and a
+ * caller that stops reading the pty can block it before it reaches its own
+ * cleanup, which looks exactly like the cleanup never running. */
+static bool wait_gone(const char *path, int ms) {
+    struct stat st;
+    long deadline = now_ms() + ms;
+    do {
+        if (stat(path, &st) != 0)
+            return true;
+        pump(50);
+    } while (now_ms() < deadline);
+    return stat(path, &st) != 0;
+}
+
 static void settle(int ms) {
     long deadline = now_ms() + ms;
     while (now_ms() < deadline)
@@ -1101,6 +1116,59 @@ static void t_fifos(void) {
     unlink(statusfifo);
 }
 
+/* Being told to go away must not leave dvtm's fifos behind.
+ *
+ * The `-c` and `-s` pipes are dvtm's to remove, and cleanup() does remove them
+ * — but only on the paths that reach it. A terminal going away sends SIGHUP,
+ * whose default action is to terminate, so the process died before cleanup ran
+ * and every session ended by closing its window left a pipe behind. Found by
+ * counting nineteen of them in one temporary directory.
+ *
+ * SIGTERM is checked beside it. That path already worked; the pair is here so
+ * that neither can regress without the other noticing. */
+static void t_hangup(void) {
+    static const int sigs[] = { SIGHUP, SIGTERM };
+    static const char *const names[] = { "SIGHUP", "SIGTERM" };
+    char cwd[256];
+
+    if (!getcwd(cwd, sizeof cwd))
+        die("getcwd: %s", strerror(errno));
+
+    for (unsigned i = 0; i < sizeof sigs / sizeof *sigs; i++) {
+        char fifo[512], name[96], why[300];
+        const char *args[3];
+
+        snprintf(
+            fifo, sizeof fifo, "%s/tests/hup.%d.%u", cwd, (int)getpid(), i);
+        unlink(fifo);
+
+        args[0] = "-c";
+        args[1] = fifo;
+        args[2] = NULL;
+        start_argv(args);
+        settle(800);
+
+        snprintf(name, sizeof name, "%s removes the command fifo", names[i]);
+        if (!wait_file(fifo, 3000)) {
+            fail(name, "dvtm never created the fifo named with -c");
+            reap();
+            unlink(fifo);
+            continue;
+        }
+
+        kill(kid, sigs[i]);
+        snprintf(why, sizeof why,
+            "dvtm was sent %s and left the fifo behind. cleanup() unlinks it, "
+            "so the signal terminated the process before cleanup ran — the "
+            "handler is registered for one signal and not the other.",
+            names[i]);
+        check(name, wait_gone(fifo, 5000), why);
+
+        reap();
+        unlink(fifo);
+    }
+}
+
 /* The regression this exists for: keystrokes silently lost while signals were
  * blocked. Send the chords back to back in a single write, with no settling —
  * spacing them out is exactly what hides the bug.
@@ -1230,6 +1298,7 @@ int main(int argc, char *argv[]) {
     t_no_dropped_keys();
     t_default_color_is_not_black();
     t_fifos();
+    t_hangup();
 
     printf("\n%d checks, %d failed, %d skipped\n", checks, failures, skipped);
     if (skipped)

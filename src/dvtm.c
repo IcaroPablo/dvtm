@@ -570,7 +570,9 @@ static void sigwinch_handler(int sig) {
     wake_main_loop();
 }
 
-static void sigterm_handler(int sig) {
+/* Both signals that mean "stop": leave the loop, so main() reaches cleanup()
+ * and the fifos dvtm created are unlinked. */
+static void sigexit_handler(int sig) {
     running = false;
 }
 
@@ -820,8 +822,12 @@ static void setup(void) {
     sigaction(SIGWINCH, &sa, NULL);
     sa.sa_handler = sigchld_handler;
     sigaction(SIGCHLD, &sa, NULL);
-    sa.sa_handler = sigterm_handler;
+    sa.sa_handler = sigexit_handler;
     sigaction(SIGTERM, &sa, NULL);
+    /* SIGHUP as well, and not by default: its default action is to terminate,
+     * so a terminal window closing killed dvtm before cleanup() ran and left
+     * the fifos named with -c and -s behind, one per session. */
+    sigaction(SIGHUP, &sa, NULL);
     sa.sa_handler = SIG_IGN;
     sigaction(SIGPIPE, &sa, NULL);
 }
