@@ -570,7 +570,12 @@ static void t_faint(void) {
      * conceal, strike, font, dwl, dhl, small and baseline, and nothing for
      * SGR 2. The cell it returns for faint text is byte for byte the cell it
      * returns for unstyled text, so there is nothing for dvtm to map onto
-     * A_DIM. vt.c did not carry it either; this is a gap, not a regression.
+     * A_DIM.
+     *
+     * This is something the fork lost, not something dvtm never had. vt.c set
+     * A_DIM on SGR 2, cleared it on 22, and wrote it back out as `;2` in copy
+     * mode. Anyone whose faint text worked before the move to libvterm sees it
+     * at full brightness now.
      *
      * The assertion is kept below, commented, so that re-enabling it is a
      * one-line change the day libvterm models faint. Uncomment it and drop

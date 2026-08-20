@@ -36,7 +36,8 @@ The whole list, with the reasoning: [docs/changes.md](docs/changes.md).
 ### Limitations
 
   * **Faint text is painted at full brightness.** libvterm has no bit for
-    `SGR 2`, so dvtm never learns a cell was dim.
+    `SGR 2`, so dvtm never learns a cell was dim. This one the fork lost: the
+    old emulator handled it, and text that was dim before is not now.
   * **Colours written `38:2::r:g:b` are read wrongly** — the standards form
     with an empty colourspace field. `38;2;r;g;b` and `38:2:r:g:b` are fine,
     and `dvtm.info` tells programs to use the first, so only programs that
