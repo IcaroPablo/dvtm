@@ -282,6 +282,17 @@ static bool screen_find(const char *text, VTermPos *at) {
     return false;
 }
 
+/* Everything the bar holds -- the tag list, the layout symbol, the keys being
+ * typed -- is on the bar's own row and nowhere else, so that row is what a
+ * check should anchor on. Spelling it as text instead ("the symbol follows the
+ * last tag") asserts on somebody's config.h: which tags are in the list depends
+ * on their names and on TAG_SHOW_EMPTY. Row 0 because BAR_POS is BAR_TOP; the
+ * one case that moves the bar looks the row up for itself. */
+static bool bar_has(const char *text) {
+    VTermPos at;
+    return screen_find(text, &at) && at.row == 0;
+}
+
 /* Is this cell painted in the terminal's default foreground, or has something
  * chosen a colour for it? */
 static bool cell_fg_is_default(int row, int col) {
@@ -1037,7 +1048,7 @@ static void t_layouts(void) {
 
     send_chord("g");
     settle(700);
-    check("Mod-g selects the grid layout", screen_has("[5]+++"),
+    check("Mod-g selects the grid layout", bar_has("+++"),
         "the bar never showed the grid symbol");
 
     send_chord("f");
@@ -1046,9 +1057,9 @@ static void t_layouts(void) {
         snprintf(why, sizeof why,
             "expected the vertical stack symbol in the bar and the master area "
             "on the left: symbol=%d, #1 col %d, #2 col %d",
-            screen_has("[5][]="), a.col, b.col);
+            bar_has("[]="), a.col, b.col);
         check("Mod-f selects the vertical stack, master area on the left",
-            screen_has("[5][]=") && a.col < b.col, why);
+            bar_has("[]=") && a.col < b.col, why);
     } else {
         fail("Mod-f selects the vertical stack, master area on the left",
             "could not locate both title bars");
@@ -1056,7 +1067,7 @@ static void t_layouts(void) {
 
     send_chord("b");
     settle(700);
-    check("Mod-b selects the bottom stack layout", screen_has("[5]TTT"),
+    check("Mod-b selects the bottom stack layout", bar_has("TTT"),
         "the bar never showed the bottom stack symbol");
     if (screen_find(W1 " | #1", &a) && screen_find(W2 " | #2", &b)) {
         snprintf(why, sizeof why,
@@ -1072,7 +1083,7 @@ static void t_layouts(void) {
 
     send_chord("m");
     settle(700);
-    check("Mod-m selects the fullscreen layout", screen_has("[5][ ]"),
+    check("Mod-m selects the fullscreen layout", bar_has("[ ]"),
         "the bar never showed the fullscreen symbol");
     snprintf(why, sizeof why,
         "fullscreen shows the selected window only: %s=%d %s=%d %s=%d", W1,
@@ -1082,7 +1093,7 @@ static void t_layouts(void) {
 
     send_chord(" ");
     settle(700);
-    check("Mod-Space moves to another layout", !screen_has("[5][ ]"),
+    check("Mod-Space moves to another layout", !bar_has("[ ]"),
         "the layout symbol did not change");
     reap();
 }
@@ -1962,14 +1973,25 @@ static void t_default_color_is_not_black(void) {
     }
     settle(400);
 
-    check("unused tags are painted in the default colour, not in black",
-        findmem(obuf, olen, "\033[39m", 5) != NULL &&
-            findmem(obuf, olen, "\033[30m[2]", 8) == NULL,
-        "the tags after the first are drawn with an explicit black "
-        "foreground, which on a dark terminal is nothing at all");
+    /* The subject is the layout symbol and not an unused tag, because an
+     * unused tag is TAG_NORMAL only while it is on screen: with TAG_SHOW_EMPTY
+     * false there is none to look at, and `no [2] was painted black` would
+     * then hold for free. The symbol is painted TAG_NORMAL either way.
+     *
+     * And no adjacency. Whether the SGR sits against the symbol depends on how
+     * many tags precede it -- with the tags shown, the switch to TAG_NORMAL
+     * happens back at [2] and the symbol inherits it. So: the bar was painted,
+     * and nowhere in the stream did dvtm ask for black. The probe writes one
+     * word and no colour of its own, so any black here is dvtm's. */
+    check("dvtm's own furniture is painted in the default colour, not in black",
+        findmem(obuf, olen, "[]=", 3) != NULL &&
+            findmem(obuf, olen, "\033[39m", 5) != NULL &&
+            findmem(obuf, olen, "\033[30m", 5) == NULL,
+        "the bar is drawn with an explicit black foreground, which on a dark "
+        "terminal is nothing at all");
 
     check("dvtm does not force a background on its own furniture",
-        findmem(obuf, olen, "\033[40m[2]", 8) == NULL,
+        findmem(obuf, olen, "\033[40m", 5) == NULL,
         "the bar is painted on a hard black background instead of the "
         "terminal's own");
     reap();
@@ -2510,7 +2532,7 @@ static void t_bar(void) {
         return;
     }
     settle(700);
-    if (!screen_find("[1][2]", &at) || at.row != 0) {
+    if (!screen_find("[1]", &at) || at.row != 0) {
         fail("Mod-s hides the bar", "the bar is not at the top to begin with");
         reap();
         return;
@@ -2518,21 +2540,21 @@ static void t_bar(void) {
 
     send_chord("s");
     settle(800);
-    check("Mod-s hides the bar", !screen_has("[1][2]"),
+    check("Mod-s hides the bar", !screen_has("[1]"),
         "the tag list is still on screen");
 
     send_chord("s");
     settle(800);
-    check("Mod-s shows it again", screen_find("[1][2]", &at) && at.row == 0,
+    check("Mod-s shows it again", screen_find("[1]", &at) && at.row == 0,
         "the tag list did not come back at the top");
 
     send_chord("S");
     settle(800);
     snprintf(why, sizeof why,
         "the bar should move to the last row, and is at %d",
-        screen_find("[1][2]", &at) ? at.row : -1);
+        screen_find("[1]", &at) ? at.row : -1);
     check("Mod-S moves the bar to the foot",
-        screen_find("[1][2]", &at) && at.row == ROWS - 1, why);
+        screen_find("[1]", &at) && at.row == ROWS - 1, why);
     reap();
 }
 
