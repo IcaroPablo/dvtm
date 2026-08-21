@@ -1,0 +1,17 @@
+#!/bin/sh
+# A stand-in pager for the Mod-E checks.
+#
+# dvtm-pager runs whatever $DVTM_PAGER names. Letting that fall through to less
+# made the checks depend on which pager the machine has and on what it draws,
+# so this stands in for all of them.
+#
+# `sed -n l` renders the escape sequences it was handed as readable text, which
+# is the point: what a pager is given and an editor is not is colour, and the
+# harness can only assert on what ends up as characters on the screen.
+#
+# The marker comes after the text, so a check that waits for it knows the text
+# is already there, with no sleep to tune. Nothing is written to stdout beyond
+# the tty: a pager displays, and the paste register is not its to change.
+sed -n l | tr -d '\n' | cut -c1-200
+printf '\nPAGERSTARTED\n'
+sleep 30

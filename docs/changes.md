@@ -99,7 +99,7 @@ uses.
 
 ## Bringing a `config.h` over from upstream dvtm
 
-Three things changed:
+Four things changed:
 
   * Add `#include "dvtm.h"` at the top, and change layout includes from
     `#include "tile.c"` to `#include "tile.h"`. The layouts were renamed to
@@ -112,3 +112,10 @@ Three things changed:
     switch no longer exists; mouse support is always built in, and is turned
     off at runtime with `ENABLE_MOUSE` in `config.h`, the `-M` flag, or
     `MOD+M`.
+  * Change the two `dvtm-pager` bindings from `copymode` to `pagemode`.
+    `copymode` used to look for "pager" or "editor" in the program's name to
+    decide whether to send colour and whether to read an answer back, so
+    renaming the program changed what dvtm did with it. There are two
+    functions now and each says what it means. Leaving a pager on `copymode`
+    still runs it, without colour, and dvtm waits for an answer it will not
+    get.

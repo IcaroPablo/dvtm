@@ -1365,6 +1365,48 @@ static void copymode_paste(const char *mode, const char *expect) {
     unsetenv("EDITOR_WITNESS");
 }
 
+/* Mod-E sends the window to a pager, and sends it in colour.
+ *
+ * Nothing covered Mod-E at all. What separates it from Mod-e is that the pager
+ * is handed the cells spelled out as escape sequences, and that dvtm keeps no
+ * pipe to read an answer back on -- a pager has no answer to give. dvtm used to
+ * work both out by looking for "pager" or "editor" in the program's name.
+ *
+ * tests/pager renders what it was given as readable text, which is the only way
+ * the harness can see an escape sequence: on screen it would just be colour. */
+static void t_pagemode(void) {
+    static const char *const name = "Mod-E hands the window to a pager, in colour";
+    char pager[1024], cwd[256];
+
+    if (!getcwd(cwd, sizeof cwd))
+        die("getcwd: %s", strerror(errno));
+    snprintf(pager, sizeof pager, "%s/tests/pager", cwd);
+    setenv("DVTM_PAGER", pager, 1);
+
+    /* A window with colour in it, so there is something for the colour half of
+     * the claim to be about. */
+    start("tests/probe truecolor", NULL, NULL);
+    if (!wait_screen("PAL256", 6000)) {
+        fail(name, "the window never appeared");
+        goto out;
+    }
+    settle(600);
+
+    send_chord("E");
+    if (!wait_screen("PAGERSTARTED", 8000)) {
+        fail(name, "the stand-in pager never ran");
+        goto out;
+    }
+    check(name, screen_has("\\033[38;2;"),
+        "the pager was handed no 24-bit colour: it got the plain text an "
+        "editor gets, which is what dvtm does when it thinks a pager is an "
+        "editor");
+
+out:
+    reap();
+    unsetenv("DVTM_PAGER");
+}
+
 /* The register outlives the window it came from: the README's claim is that
  * what an editor hands back goes into *any* window, and the three cases above
  * only ever paste back into the one they copied from.
@@ -2105,6 +2147,7 @@ int main(int argc, char *argv[]) {
     t_plain_text_default_color();
     t_cursor_follows_child();
     t_copymode();
+    t_pagemode();
     t_copymode_paste();
     t_copymode_no_history();
     t_copymode_big_answer();

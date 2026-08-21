@@ -929,27 +929,35 @@ static void create(const char *args[]) {
     arrange();
 }
 
-static void copymode(const char *args[]) {
-    if (!args || !args[0] || !sel || sel->editor)
+/* Hand the window's contents to a program that gets the terminal to itself.
+ *
+ * `colored` spells the cells out as escape sequences, which a pager renders and
+ * an editor would only show as noise. `readback` keeps the second pipe, the one
+ * the program writes its answer on; a pager has no answer to give.
+ *
+ * Both are told, not guessed. They used to be read out of the program's name --
+ * "pager" in it meant colour, "editor" in it meant an answer -- which made what
+ * a program is called decide the protocol it speaks. */
+static void filtermode(
+    const char *prog, const char *keys, bool colored, bool readback) {
+    if (!prog || !sel || sel->editor)
         return;
-
-    bool colored = strstr(args[0], "pager") != NULL;
 
     if (!(sel->editor = term_create(sel->h - sel->has_title_line, sel->w, 0)))
         return;
 
     int *to = &sel->editor_fds[0];
-    int *from = strstr(args[0], "editor") ? &sel->editor_fds[1] : NULL;
+    int *from = readback ? &sel->editor_fds[1] : NULL;
     sel->editor_fds[0] = sel->editor_fds[1] = -1;
 
-    const char *argv[3] = { args[0], NULL, NULL };
+    const char *argv[3] = { prog, NULL, NULL };
     char argline[32];
     int line = term_content_start(sel->app);
     snprintf(argline, sizeof(argline), "+%d", line);
     argv[1] = argline;
 
     char *cwd = getcwd_by_pid(sel);
-    pid_t pid = term_forkpty(sel->editor, args[0], argv, cwd, NULL, to, from);
+    pid_t pid = term_forkpty(sel->editor, prog, argv, cwd, NULL, to, from);
     free(cwd);
     if (pid < 0) {
         term_destroy(sel->editor);
@@ -984,8 +992,18 @@ static void copymode(const char *args[]) {
         sel->editor_fds[0] = -1;
     }
 
-    if (args[1])
-        term_write(sel->editor, args[1], strlen(args[1]));
+    if (keys)
+        term_write(sel->editor, keys, strlen(keys));
+}
+
+static void copymode(const char *args[]) {
+    if (args)
+        filtermode(args[0], args[1], false, true);
+}
+
+static void pagemode(const char *args[]) {
+    if (args)
+        filtermode(args[0], args[1], true, false);
 }
 
 static void focusn(const char *args[]) {

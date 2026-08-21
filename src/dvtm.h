@@ -167,6 +167,7 @@ static void eprint(const char *errstr, ...);
 /* commands for use by keybindings */
 static void create(const char *args[]);
 static void copymode(const char *args[]);
+static void pagemode(const char *args[]);
 static void focusn(const char *args[]);
 static void focusid(const char *args[]);
 static void focusnext(const char *args[]);
