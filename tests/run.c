@@ -2534,6 +2534,144 @@ static void t_bar(void) {
     reap();
 }
 
+
+/* ── the flags nothing measured ───────────────────────────────────────────── */
+
+/* -t sets a fixed title for the terminal dvtm is running in, instead of
+ * following the focused window's. Asserted on the bytes: it is an escape
+ * sequence sent to the outer terminal, and never appears on dvtm's own
+ * screen. */
+static void t_flag_title(void) {
+    const char *args[4];
+
+    args[0] = "-t";
+    args[1] = "DVTMTITLE";
+    args[2] = "tests/probe mark TITLED";
+    args[3] = NULL;
+    start_argv(args);
+    wait_screen("TITLED", 6000);
+    check("-t sets the terminal's title", wait_bytes("\033]0;DVTMTITLE\007", 4000),
+        "dvtm never asked the outer terminal for the title it was given");
+    reap();
+}
+
+/* -m changes the modifier every binding starts with. Both halves matter: the
+ * new one has to work and the old one has to stop working, or the flag has
+ * added a modifier rather than moved it. */
+static void t_flag_modifier(void) {
+    const char *args[4];
+
+    args[0] = "-m";
+    args[1] = "^b";
+    args[2] = "tests/probe mark MODDED";
+    args[3] = NULL;
+    start_argv(args);
+    if (!wait_screen("MODDED", 6000)) {
+        fail("-m moves the modifier", "the window never appeared");
+        reap();
+        return;
+    }
+    settle(600);
+
+    /* The new modifier first, from one window. Doing it the other way round
+     * cannot fail: if -m did nothing, the old modifier opens the window and
+     * the count is already right before the new one is tried. */
+    tty_write("\x02"
+              "c",
+        2);
+    check("-m moves the modifier", wait_ids(2, 6000),
+        "CTRL+b did not open a window, so the flag moved the modifier "
+        "nowhere");
+
+    tty_write("\x07"
+              "c",
+        2); /* the old one, which should now be two ordinary keys */
+    settle(1500);
+    check("-m takes the old modifier away", !screen_has("#3]"),
+        "CTRL+g still opened a window after the modifier was moved to "
+        "CTRL+b, so the flag added a modifier rather than moving one");
+    reap();
+}
+
+/* -M turns the mouse off. dvtm asks the outer terminal to report mouse events
+ * only when it wants them, so the request itself is the observable. */
+static void t_flag_mouse(void) {
+    const char *args[3];
+
+    start("tests/probe mark MOUSEON", NULL, NULL);
+    wait_screen("MOUSEON", 6000);
+    settle(400);
+    check("mouse reporting is asked for by default", wait_bytes("1000h", 2000),
+        "dvtm never asked the terminal to report mouse events");
+    reap();
+
+    args[0] = "-M";
+    args[1] = "tests/probe mark MOUSEOFF";
+    args[2] = NULL;
+    start_argv(args);
+    wait_screen("MOUSEOFF", 6000);
+    settle(600);
+    check("-M leaves the mouse to the terminal",
+        !findmem(obuf, olen, "1000h", 5),
+        "dvtm asked for mouse events despite -M, which is what takes the "
+        "terminal's own selection away");
+    reap();
+}
+
+/* -d sets how long ncurses waits for the rest of an escape sequence before
+ * deciding the escape was on its own.
+ *
+ * This one sleeps between two writes, which the rest of the suite never does.
+ * The delay is not a wait for something to happen -- it is the input, and the
+ * thing being measured is what dvtm does with a sequence split across it. Both
+ * directions are checked, with a wide margin either way, so a slow machine
+ * cannot turn one into the other.
+ *
+ * Mod-PageUp is the vehicle: assembled, it scrolls; not assembled, the escape
+ * goes to the child and the screen stays where it is. */
+static void split_pageup(const char *delay, int gap_ms) {
+    const char *args[6];
+
+    setenv("FILL_LINES", "100", 1);
+    args[0] = "-d";
+    args[1] = delay;
+    args[2] = "-h";
+    args[3] = "500";
+    args[4] = "tests/fill";
+    args[5] = NULL;
+    start_argv(args);
+    wait_screen("FILLED", 10000);
+    settle(600);
+
+    tty_write("\x07", 1);
+    tty_write("\033", 1);
+    settle(gap_ms);
+    tty_write("[5~", 3);
+    settle(900);
+    unsetenv("FILL_LINES");
+}
+
+static void t_flag_escdelay(void) {
+    /* Half a second apart with a whole second allowed. This is the half that
+     * isolates the flag: the default is a tenth of a second, so a dvtm that
+     * ignored -d would have given up long before the rest arrived. */
+    split_pageup("1000", 500);
+    check("-d waits that long for the rest of a sequence", screen_has("L0070"),
+        "PageUp arrived in two pieces half a second apart, with a second "
+        "allowed, and was not put back together");
+    reap();
+
+    /* And the other way. Worth saying plainly: this one does not isolate -d.
+     * Four hundred milliseconds is past the default as well, so it asserts
+     * that the timeout exists and is honoured, not that -d set it. */
+    split_pageup("50", 400);
+    check("an escape on its own is not joined to what follows",
+        screen_has("L0099") && !screen_has("L0070"),
+        "the two pieces were four hundred milliseconds apart and were still "
+        "joined into one key");
+    reap();
+}
+
 /* ── main ─────────────────────────────────────────────────────────────────── */
 
 static void build_terminfo(void) {
@@ -2648,6 +2786,10 @@ int main(int argc, char *argv[]) {
     t_no_dropped_keys();
     t_typing_during_output();
     t_default_color_is_not_black();
+    t_flag_title();
+    t_flag_modifier();
+    t_flag_mouse();
+    t_flag_escdelay();
     t_fifos();
     t_hangup();
 
