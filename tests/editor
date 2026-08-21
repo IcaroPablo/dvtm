@@ -26,6 +26,8 @@
 #   fail   save something new and then fail: dvtm must still paste nothing,
 #          which is the only case that tells the exit status apart from the
 #          content check
+#   multi  save three short lines: the shape of the report, since a one-line
+#          paste is exactly the case that always worked
 #   stay   two runs, counted in $EDITOR_SEQ: the first saves PASTEME and
 #          leaves, the second saves SECONDTEXT and never exits. That is an
 #          editor sitting on a saved buffer -- `:w` without `:q` -- and it is
@@ -52,6 +54,7 @@ big) awk -v n="${EDITOR_BYTES:-65536}" 'BEGIN {
      # to be over waits for this one instead.
      [ -n "$EDITOR_WITNESS" ] && : > "$EDITOR_WITNESS.done" ;;
 fail) printf 'PASTEME\n' > "$f"; exit 3 ;;
+multi) printf 'L1\nL2\nL3\n' > "$f" ;;
 stay) n=0
       [ -f "$EDITOR_SEQ" ] && n=$(cat "$EDITOR_SEQ")
       n=$((n + 1))

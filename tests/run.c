@@ -1460,7 +1460,7 @@ out:
  * handed, only the probe can say.
  */
 static void paste_announced(
-    const char *name, const char *how, const char *want) {
+    const char *name, const char *how, const char *saved, const char *want) {
     char witness[512], cwd[256], win[64], why[256];
 
     if (!getcwd(cwd, sizeof cwd))
@@ -1469,7 +1469,7 @@ static void paste_announced(
         witness, sizeof witness, "%s/tests/witness.k.%d", cwd, (int)getpid());
     unlink(witness);
     snprintf(win, sizeof win, "tests/probe paste%s%s", *how ? " " : "", how);
-    setenv("EDITOR_MODE", "edit", 1);
+    setenv("EDITOR_MODE", saved, 1);
     setenv("EDITOR_WITNESS", witness, 1);
 
     start(win, NULL, NULL);
@@ -1479,8 +1479,8 @@ static void paste_announced(
     }
     settle(600);
 
-    /* Copy mode is the only way to put anything in the register: the editor
-     * saves PASTEME, which is what gets pasted back a moment later. */
+    /* Copy mode is the only way to put anything in the register: what the
+     * editor saves is what gets pasted back a moment later. */
     send_chord("e");
     if (!wait_file(witness, 8000)) {
         fail(name, "the editor never ran");
@@ -1504,13 +1504,29 @@ out:
 }
 
 static void t_paste_bracketed(void) {
+    /* The whole rendering, closing bracket included: brackets that open and
+     * never close leave a line editor waiting for the rest of a paste that has
+     * already arrived. */
     paste_announced("a paste reaches a line editor announced as a paste",
-        "bracket", "PASTE=ESC[200~PASTEME");
+        "bracket", "edit", "PASTE=ESC[200~PASTEME<0a>ESC[201~");
+}
+
+/* The report itself: several lines at once. One pair of brackets around the
+ * lot and not a pair per line -- a single line is the one case that behaved
+ * the same either way, which is what made this look like a limit on length. */
+static void t_paste_bracketed_lines(void) {
+    paste_announced("a multi-line paste arrives as one paste", "bracket",
+        "multi", "PASTE=ESC[200~L1<0a>L2<0a>L3<0a>ESC[201~");
 }
 
 static void t_paste_unannounced(void) {
-    paste_announced(
-        "a child that never asked is sent no brackets", "", "PASTE=PASTEME");
+    paste_announced("a child that never asked is sent no brackets", "", "edit",
+        "PASTE=PASTEME<0a>");
+}
+
+static void t_paste_unasked(void) {
+    paste_announced("a child that took the request back is sent none either",
+        "unask", "edit", "PASTE=PASTEME<0a>");
 }
 
 /* An editor may hand back more than a pipe will hold.
@@ -1959,7 +1975,9 @@ int main(int argc, char *argv[]) {
     t_paste_other_window();
     t_paste_large();
     t_paste_bracketed();
+    t_paste_bracketed_lines();
     t_paste_unannounced();
+    t_paste_unasked();
     t_kill_removes_window();
     t_window_ids();
     t_focus();

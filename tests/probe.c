@@ -175,9 +175,9 @@ int main(int argc, char *argv[]) {
          * typing. dvtm's screen cannot show that, so the probe prints the bytes
          * it was handed and the check reads them off the screen.
          *
-         * `bracket` asks for the brackets first, the way a shell's line editor
-         * does. Without that argument nothing is asked for, and nothing must
-         * arrive: a program that reads them literally would show them. */
+         * The argument says what the child asks for; without one it asks for
+         * nothing, and then nothing must arrive, since a program that reads
+         * the brackets literally would show them as text. */
         struct termios old, raw;
         char buf[256], pretty[3 * sizeof buf];
         int n;
@@ -189,8 +189,14 @@ int main(int argc, char *argv[]) {
             raw.c_cc[VTIME] = 0;
             tcsetattr(STDIN_FILENO, TCSANOW, &raw);
         }
+        /* `bracket` asks and keeps it; `unask` asks and takes it back, which
+         * has to leave the child in the same position as never having asked.
+         * A mode is a mode and not a latch. */
         if (argc > 2 && !strcmp(argv[2], "bracket")) {
             fputs("\033[?2004h", stdout);
+            fflush(stdout);
+        } else if (argc > 2 && !strcmp(argv[2], "unask")) {
+            fputs("\033[?2004h\033[?2004l", stdout);
             fflush(stdout);
         }
         /* Nothing is pasted until the register has something in it, which
