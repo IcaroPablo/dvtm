@@ -182,13 +182,13 @@ int term_color_get(Term *t, int32_t fg, int32_t bg) {
 /* Ask ncurses what this terminal calls its own default colours -- what a -1 in
  * a colour pair means. Called from term_init. */
 void ui_init_colors(void) {
-    short fg = -1, bg = -1;
-
     /* Deliberately short locals, initialised. pair_content writes shorts:
      * pointing it at the int32_t globals would leave their upper half
      * untouched, turning a -1 into 65535 and every default-coloured cell into
      * an arbitrary colour. And if pair_content fails outright, the locals must
      * already hold something sane rather than stack garbage. */
+    short fg = -1, bg = -1;
+
     direct_color = COLORS >= (1 << 24);
 
     /* use_default_colors() first: it is what decides whether -1 can be handed
@@ -206,7 +206,6 @@ void ui_init_colors(void) {
         if (default_bg == -1)
             default_bg = COLOR_BLACK;
     }
-    term_color_get(NULL, COLOR_WHITE, COLOR_BLACK);
 }
 
 /* ── painting ─────────────────────────────────────────────────────────────── */
