@@ -313,19 +313,6 @@ static bool wait_bytes(const char *needle, int ms) {
     return findmem(obuf, olen, needle, strlen(needle)) != NULL;
 }
 
-/* Like wait_bytes, but only over what arrived after a given point, so a check
- * can ask whether something was written *again*. */
-static bool wait_bytes_from(size_t from, const char *needle, int ms) {
-    size_t n = strlen(needle);
-    long deadline = now_ms() + ms;
-    do {
-        if (olen > from && findmem(obuf + from, olen - from, needle, n))
-            return true;
-        pump(50);
-    } while (now_ms() < deadline);
-    return olen > from && findmem(obuf + from, olen - from, needle, n) != NULL;
-}
-
 static bool wait_screen(const char *text, int ms) {
     long deadline = now_ms() + ms;
     do {
@@ -1219,7 +1206,6 @@ static void t_copymode(void) {
  * unchanged, NOTHING for one that declined. */
 static void copymode_paste(const char *mode, const char *expect) {
     char witness[512], cwd[256], chord[2];
-    size_t mark;
     int seen;
 
     if (!getcwd(cwd, sizeof cwd))
@@ -1246,7 +1232,6 @@ static void copymode_paste(const char *mode, const char *expect) {
     settle(400);
     seen = screen_count("COPYSRC");
 
-    mark = olen;
     chord[0] = MOD;
     chord[1] = 'e';
     tty_write(chord, 2);
@@ -1286,7 +1271,6 @@ static void copymode_paste(const char *mode, const char *expect) {
         }
     }
 
-    mark = olen;
     chord[0] = MOD;
     chord[1] = 'p';
     tty_write(chord, 2);
