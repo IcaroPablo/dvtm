@@ -1496,6 +1496,12 @@ static void handle_statusbar(void) {
     }
 }
 
+/* Where the answer buffer starts, in bytes. It doubles from here, so the size
+ * only decides how often that happens. What it must not be is the scrollback
+ * setting: that counts lines, not bytes, and `dvtm -h 0` made the first
+ * allocation zero bytes long, which swallowed everything the editor wrote. */
+#define EDITOR_ANSWER_INITIAL 8192
+
 /* Take whatever the editor has written so far.
  *
  * Called every time the pipe is readable, and not once at the end: the pipe
@@ -1509,8 +1515,8 @@ static void read_editor(Client *c) {
     if (c->editor_fds[1] == -1)
         return;
     if (c->editreg.len == c->editreg.size) {
-        size_t want =
-            c->editreg.size ? c->editreg.size * 2 : (size_t)screen.history;
+        size_t want = c->editreg.size ? c->editreg.size * 2
+                                      : (size_t)EDITOR_ANSWER_INITIAL;
         char *p = realloc(c->editreg.data, want);
         if (!p) {
             /* No room for more, so this is the end of the answer: close, and

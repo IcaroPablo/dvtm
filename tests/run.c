@@ -1586,6 +1586,56 @@ out:
 static void t_copymode_paste(void) {
     copymode_paste("edit", "PASTEME");
 }
+
+/* Copy mode with the scrollback switched off.
+ *
+ * The buffer dvtm reads the editor's answer into took its first size from -h,
+ * which counts lines and not bytes. At -h 0 that was zero bytes, so every read
+ * asked for nothing, the answer was dropped, and Mod-p produced silence -- with
+ * no error anywhere. The live screen is still worth copying when no history is
+ * kept, so this has to work.
+ *
+ * Its own case rather than a fourth mode in copymode_paste(), because the flag
+ * has to be on dvtm's command line and that helper starts dvtm without one. */
+static void t_copymode_no_history(void) {
+    static const char *const name = "copy mode works with the history at zero";
+    char witness[512], cwd[256];
+    const char *args[4];
+
+    if (!getcwd(cwd, sizeof cwd))
+        die("getcwd: %s", strerror(errno));
+    snprintf(
+        witness, sizeof witness, "%s/tests/witness.h.%d", cwd, (int)getpid());
+    unlink(witness);
+    setenv("EDITOR_MODE", "edit", 1);
+    setenv("EDITOR_WITNESS", witness, 1);
+
+    args[0] = "-h";
+    args[1] = "0";
+    args[2] = "sh -c cat";
+    args[3] = NULL;
+    start_argv(args);
+    settle(1200);
+
+    send_chord("e");
+    if (!wait_file(witness, 8000)) {
+        fail(name, "the editor never ran");
+        goto out;
+    }
+    settle(1500);
+
+    send_chord("p");
+    check(name, wait_screen("PASTEME", 8000),
+        "the editor saved PASTEME and Mod-p produced nothing: the answer "
+        "buffer was sized from -h, so with no history there was nowhere to "
+        "put it");
+
+out:
+    reap();
+    unlink(witness);
+    unsetenv("EDITOR_MODE");
+    unsetenv("EDITOR_WITNESS");
+}
 static void t_copymode_unchanged(void) {
     copymode_paste("keep", "NOTHING");
 }
@@ -1967,6 +2017,7 @@ int main(int argc, char *argv[]) {
     t_cursor_follows_child();
     t_copymode();
     t_copymode_paste();
+    t_copymode_no_history();
     t_copymode_big_answer();
     t_copymode_unchanged();
     t_copymode_resaved();
