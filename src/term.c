@@ -444,6 +444,21 @@ static void flush_output(Term *t) {
         term_write(t, buf, len);
 }
 
+void term_paste(Term *t, const char *buf, size_t len) {
+    if (!t)
+        return;
+    /* Each of these three appends to the same queue, so the order on the wire
+     * is the order here even when the pty takes none of it yet. libvterm emits
+     * nothing at all for a child that never asked to have pastes bracketed,
+     * which is the whole point of asking it rather than writing the escapes
+     * here: an editor that reads them literally must not be handed them. */
+    vterm_keyboard_start_paste(t->vt);
+    flush_output(t);
+    term_write(t, buf, len);
+    vterm_keyboard_end_paste(t->vt);
+    flush_output(t);
+}
+
 int term_process(Term *t) {
     char buf[8192];
     ssize_t res;

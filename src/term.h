@@ -103,6 +103,13 @@ int term_process(Term *);
  * kept, and the main loop selects the pty for writing while term_pending()
  * says so and calls term_flush() to move what fits. */
 ssize_t term_write(Term *, const char *buf, size_t len);
+/* Hand over a block of text the user did not type: the same bytes as
+ * term_write(), wrapped in the brackets a paste is announced with when the
+ * child asked for them. Without those, a line editor reads a multi-line paste
+ * as line after line of typing and runs each one; with them it takes the whole
+ * block as text. Whether the brackets go out at all is the child's decision,
+ * which libvterm has been tracking since it saw the request. */
+void term_paste(Term *, const char *buf, size_t len);
 bool term_pending(Term *);
 void term_flush(Term *);
 /* A curses key code (KEY_UP, KEY_F(3)...) and one character the user typed.

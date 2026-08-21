@@ -1443,6 +1443,76 @@ out:
     unsetenv("EDITOR_WITNESS");
 }
 
+/* A paste has to arrive announced, and only when the child asked for that.
+ *
+ * This is the long-paste report. Without the brackets a line editor cannot tell
+ * pasted bytes from typing, so it reads a multi-line paste as line after line
+ * of typing and runs each one: 64 lines of scrollback became 64 commands and
+ * none of it appeared as text. A one-line paste looked fine, which is what made
+ * it read as a size limit.
+ *
+ * The brackets are libvterm's to send, and it sends none to a child that never
+ * enabled the mode -- an editor reading them literally would put them on screen
+ * as text. Both halves are checked, because sending them unconditionally is the
+ * obvious wrong fix.
+ *
+ * Asserted from inside the window: dvtm's screen cannot show what the child was
+ * handed, only the probe can say.
+ */
+static void paste_announced(
+    const char *name, const char *how, const char *want) {
+    char witness[512], cwd[256], win[64], why[256];
+
+    if (!getcwd(cwd, sizeof cwd))
+        die("getcwd: %s", strerror(errno));
+    snprintf(
+        witness, sizeof witness, "%s/tests/witness.k.%d", cwd, (int)getpid());
+    unlink(witness);
+    snprintf(win, sizeof win, "tests/probe paste%s%s", *how ? " " : "", how);
+    setenv("EDITOR_MODE", "edit", 1);
+    setenv("EDITOR_WITNESS", witness, 1);
+
+    start(win, NULL, NULL);
+    if (!wait_screen("PASTEREADY", 6000)) {
+        fail(name, "the probe never came up");
+        goto out;
+    }
+    settle(600);
+
+    /* Copy mode is the only way to put anything in the register: the editor
+     * saves PASTEME, which is what gets pasted back a moment later. */
+    send_chord("e");
+    if (!wait_file(witness, 8000)) {
+        fail(name, "the editor never ran");
+        goto out;
+    }
+    settle(1500);
+
+    send_chord("p");
+    snprintf(why, sizeof why,
+        "the probe prints the bytes it was handed, and %s was expected; "
+        "anything else means the paste was announced when it should not have "
+        "been, or not announced when it should",
+        want);
+    check(name, wait_screen(want, 8000), why);
+
+out:
+    reap();
+    unlink(witness);
+    unsetenv("EDITOR_MODE");
+    unsetenv("EDITOR_WITNESS");
+}
+
+static void t_paste_bracketed(void) {
+    paste_announced("a paste reaches a line editor announced as a paste",
+        "bracket", "PASTE=ESC[200~PASTEME");
+}
+
+static void t_paste_unannounced(void) {
+    paste_announced(
+        "a child that never asked is sent no brackets", "", "PASTE=PASTEME");
+}
+
 /* An editor may hand back more than a pipe will hold.
  *
  * dvtm used to read the editor's answer only once the editor had exited, and
@@ -1888,6 +1958,8 @@ int main(int argc, char *argv[]) {
     t_copymode_editor_still_open();
     t_paste_other_window();
     t_paste_large();
+    t_paste_bracketed();
+    t_paste_unannounced();
     t_kill_removes_window();
     t_window_ids();
     t_focus();

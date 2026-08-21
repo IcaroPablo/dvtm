@@ -148,6 +148,12 @@ filter, and dvtm only reads what it left behind once it is gone. So `MOD+p`
 while the editor is still on screen pastes the copy from before it — saving and
 switching windows without quitting is not enough.
 
+`MOD+p` announces the paste as a paste, when the program in the window asked
+for that — shells and editors do. Without it a line editor cannot tell pasted
+bytes from typing and reads a multi-line paste as line after line of typing,
+running each one: a screenful of scrollback arrived as a screenful of commands.
+A single line looked fine, which made it read as a limit on length.
+
 `MOD+E` sends the same text to a pager instead, which only displays it, and
 `MOD+/` opens the pager already searching forward.
 

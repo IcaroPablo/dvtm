@@ -167,6 +167,41 @@ int main(int argc, char *argv[]) {
         hex[o] = '\0';
         printf("ECHO=%s\n", hex);
         fflush(stdout);
+    } else if (!strcmp(what, "paste")) {
+        /* What a paste looks like from inside the window.
+         *
+         * A line editor cannot tell pasted bytes from typing unless the paste
+         * arrives bracketed, and reads a multi-line one as line after line of
+         * typing. dvtm's screen cannot show that, so the probe prints the bytes
+         * it was handed and the check reads them off the screen.
+         *
+         * `bracket` asks for the brackets first, the way a shell's line editor
+         * does. Without that argument nothing is asked for, and nothing must
+         * arrive: a program that reads them literally would show them. */
+        struct termios old, raw;
+        char buf[256], pretty[3 * sizeof buf];
+        int n;
+
+        if (tcgetattr(STDIN_FILENO, &old) == 0) {
+            raw = old;
+            raw.c_lflag &= (tcflag_t) ~(ICANON | ECHO);
+            raw.c_cc[VMIN] = 0;
+            raw.c_cc[VTIME] = 0;
+            tcsetattr(STDIN_FILENO, TCSANOW, &raw);
+        }
+        if (argc > 2 && !strcmp(argv[2], "bracket")) {
+            fputs("\033[?2004h", stdout);
+            fflush(stdout);
+        }
+        /* Nothing is pasted until the register has something in it, which
+         * takes a trip through copy mode, so the wait here is long. */
+        printf("PASTEREADY\n");
+        fflush(stdout);
+
+        n = reply(buf, sizeof buf, 30000);
+        printable(buf, n, pretty, sizeof pretty);
+        printf("PASTE=%s\n", pretty);
+        fflush(stdout);
     } else if (!strcmp(what, "plain")) {
         /* Deliberately no SGR at all: these cells must come out in the
          * terminal's default colours, not in some colour of dvtm's choosing. */

@@ -1130,7 +1130,7 @@ static void killclient(const char *args[]) {
 
 static void paste(const char *args[]) {
     if (sel && copyreg.data)
-        term_write(sel->term, copyreg.data, copyreg.len);
+        term_paste(sel->term, copyreg.data, copyreg.len);
 }
 
 static void quit(const char *args[]) {
