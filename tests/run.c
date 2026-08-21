@@ -1407,6 +1407,59 @@ out:
     unsetenv("DVTM_PAGER");
 }
 
+/* Handing a long scrollback to a program that draws before it reads.
+ *
+ * The other half of the paste deadlock, and the half that was left standing.
+ * dvtm wrote the window's contents into the pipe with a loop that insisted on
+ * finishing. A pipe holds a few dozen kilobytes and a scrollback is longer, so
+ * dvtm blocked there -- and while it is blocked it is not reading the pager's
+ * terminal, so the pager fills that and blocks in turn. Neither moves again.
+ *
+ * dvtm-editor drains its input before running anything, which is why copy mode
+ * never showed this. dvtm-pager execs the pager straight onto the pipe.
+ *
+ * The assertion is that dvtm still answers, not that the text arrived: a pager
+ * that is slow, or that never reads at all, is not this bug. */
+static void t_pager_stalls(void) {
+    static const char *const name =
+        "a pager that draws before it reads does not wedge dvtm";
+    char pager[1024], cwd[256];
+    const char *args[4];
+
+    if (!getcwd(cwd, sizeof cwd))
+        die("getcwd: %s", strerror(errno));
+    snprintf(pager, sizeof pager, "%s/tests/pager", cwd);
+    setenv("DVTM_PAGER", pager, 1);
+    setenv("PAGER_STALL", "1", 1);
+
+    /* A thousand lines of colour, so that what dvtm has to hand over is
+     * comfortably more than a pipe will hold in one go. */
+    args[0] = "-h";
+    args[1] = "1000";
+    args[2] = "tests/fill";
+    args[3] = NULL;
+    start_argv(args);
+    if (!wait_screen("FILLED", 15000)) {
+        fail(name, "the window never filled its scrollback");
+        goto out;
+    }
+    settle(800);
+
+    send_chord("E");
+    settle(3000);
+
+    send_chord("c");
+    check(name, wait_ids(2, 10000),
+        "after Mod-E dvtm never opened another window: it is blocked inside "
+        "its own write to the pager, which is blocked writing to a terminal "
+        "dvtm has stopped reading");
+
+out:
+    reap();
+    unsetenv("DVTM_PAGER");
+    unsetenv("PAGER_STALL");
+}
+
 /* The register outlives the window it came from: the README's claim is that
  * what an editor hands back goes into *any* window, and the three cases above
  * only ever paste back into the one they copied from.
@@ -2185,6 +2238,7 @@ int main(int argc, char *argv[]) {
     t_cursor_follows_child();
     t_copymode();
     t_pagemode();
+    t_pager_stalls();
     t_copymode_paste();
     t_copymode_no_history();
     t_copymode_big_answer();

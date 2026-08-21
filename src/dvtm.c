@@ -826,6 +826,7 @@ static void destroy(Client *c) {
     term_destroy(c->term);
     delwin(c->window);
     free(c->editreg.data);
+    free(c->editout);
     if (!clients && LENGTH(actions)) {
         if (!strcmp(c->cmd, shell))
             quit(NULL);
@@ -934,6 +935,37 @@ static void create(const char *args[]) {
     arrange();
 }
 
+/* Move as much of the window's contents to the filter as it will take now.
+ *
+ * Queued rather than written in one go, for the reason term.c queues what goes
+ * to a child: the program on the other end need not read before it writes. A
+ * pager paints its first screen from what it already has, and a scrollback is
+ * longer than a pipe holds. A write that insisted on finishing blocked dvtm
+ * there, so dvtm stopped reading the pager's terminal, so the pager filled it
+ * and blocked too, and neither moved again.
+ *
+ * Closing is what tells the program its input has ended, so it happens once,
+ * when there is nothing left to send or nothing more can be sent. */
+static void flush_to_editor(Client *c) {
+    while (c->editoutpos < c->editoutlen) {
+        ssize_t res = write(c->editor_fds[0], c->editout + c->editoutpos,
+            c->editoutlen - c->editoutpos);
+        if (res < 0) {
+            if (errno == EINTR)
+                continue;
+            if (errno == EAGAIN)
+                return; /* the pipe is full; the next pass will try again */
+            break;      /* EPIPE: it is not reading, and will not start */
+        }
+        c->editoutpos += (size_t)res;
+    }
+    free(c->editout);
+    c->editout = NULL;
+    c->editoutpos = c->editoutlen = 0;
+    close(c->editor_fds[0]);
+    c->editor_fds[0] = -1;
+}
+
 /* Hand the window's contents to a program that gets the terminal to itself.
  *
  * `colored` spells the cells out as escape sequences, which a pager renders and
@@ -979,22 +1011,12 @@ static void filtermode(
     sel->editreg.len = 0;
 
     if (sel->editor_fds[0] != -1) {
-        char *buf = NULL;
-        size_t len = term_content_get(sel->app, &buf, colored);
-        char *cur = buf;
-        while (len > 0) {
-            ssize_t res = write(sel->editor_fds[0], cur, len);
-            if (res < 0) {
-                if (errno == EAGAIN || errno == EINTR)
-                    continue;
-                break;
-            }
-            cur += res;
-            len -= res;
-        }
-        free(buf);
-        close(sel->editor_fds[0]);
-        sel->editor_fds[0] = -1;
+        int fl = fcntl(sel->editor_fds[0], F_GETFL);
+        if (fl != -1)
+            fcntl(sel->editor_fds[0], F_SETFL, fl | O_NONBLOCK);
+        sel->editoutlen = term_content_get(sel->app, &sel->editout, colored);
+        sel->editoutpos = 0;
+        flush_to_editor(sel);
     }
 
     if (keys)
@@ -1568,6 +1590,13 @@ static void handle_editor(Client *c) {
     }
     c->editor_died = false;
     c->editor_fds[1] = -1;
+    if (c->editor_fds[0] != -1) {
+        close(c->editor_fds[0]);
+        c->editor_fds[0] = -1;
+    }
+    free(c->editout);
+    c->editout = NULL;
+    c->editoutpos = c->editoutlen = 0;
     term_destroy(c->editor);
     c->editor = NULL;
     c->term = c->app;
@@ -1742,6 +1771,8 @@ int main(int argc, char *argv[]) {
             watch(c->editor ? c->editor->pty : c->app->pty, &rd, &nfds);
             if (c->editor_fds[1] != -1)
                 watch(c->editor_fds[1], &rd, &nfds);
+            if (c->editor_fds[0] != -1)
+                watch(c->editor_fds[0], &wr, &nfds);
             /* Reading stays unconditional. That is the whole point: the child
              * only takes more once dvtm has drained what it wrote back. */
             if (term_pending(c->term))
@@ -1844,6 +1875,9 @@ int main(int argc, char *argv[]) {
             handle_statusbar();
 
         for (Client *c = clients; c; c = c->next) {
+            if (c->editor_fds[0] != -1 && FD_ISSET(c->editor_fds[0], &wr))
+                flush_to_editor(c);
+
             if (c->editor_fds[1] != -1 && FD_ISSET(c->editor_fds[1], &rd))
                 read_editor(c);
 

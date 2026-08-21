@@ -1,0 +1,15 @@
+#!/bin/sh
+# Fill a window's scrollback with coloured, full-width lines, then hold the
+# window open. $FILL_LINES says how many.
+#
+# For the checks that need dvtm to have more to hand a filter than a pipe will
+# take in one go. Coloured, because copy mode spells the colours out as escape
+# sequences and that is most of the length.
+awk -v n="${FILL_LINES:-1000}" 'BEGIN {
+    s = ""
+    while (length(s) < 70) s = s "y"
+    for (i = 0; i < n; i++)
+        printf "\033[38;2;%d;80;90m%s\033[0m\n", i % 200, s
+    print "FILLED"
+}'
+cat

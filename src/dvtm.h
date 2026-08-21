@@ -52,6 +52,10 @@ struct Client {
     Term *editor, *app;
     int editor_fds[2];
     bool editor_died;
+    /* What is still on its way to the editor, held between editoutpos and
+     * editoutlen. Queued rather than written in one go: see flush_to_editor. */
+    char *editout;
+    size_t editoutpos, editoutlen;
     /* What this window's editor has handed back so far, kept apart from
      * copyreg until the editor is gone: one that hands back nothing leaves the
      * last copy where it was. Per window, because two windows can be in copy

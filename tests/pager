@@ -12,6 +12,17 @@
 # The marker comes after the text, so a check that waits for it knows the text
 # is already there, with no sleep to tune. Nothing is written to stdout beyond
 # the tty: a pager displays, and the paste register is not its to change.
+# $PAGER_STALL: draw before reading a byte, which is what a real pager does --
+# it paints its first screen from what it has while the rest is still coming.
+# dvtm must not be blocked inside its own write while that happens, or the two
+# wait on each other: dvtm stops reading this terminal, this fills it and stops
+# reading dvtm.
+if [ -n "$PAGER_STALL" ]; then
+    awk 'BEGIN { s = ""; while (length(s) < 78) s = s "z"
+                 for (i = 0; i < 200; i++) print s }'
+    sleep 2
+fi
+
 sed -n l | tr -d '\n' | cut -c1-200
 printf '\nPAGERSTARTED\n'
 sleep 30
