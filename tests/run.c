@@ -1547,7 +1547,10 @@ static void t_copymode_big_answer(void) {
         die("getcwd: %s", strerror(errno));
     snprintf(
         witness, sizeof witness, "%s/tests/witness.p.%d", cwd, (int)getpid());
+    /* Both names before the first `goto out`, which unlinks both. */
+    snprintf(done, sizeof done, "%s.done", witness);
     unlink(witness);
+    unlink(done);
     setenv("EDITOR_MODE", "big", 1);
     setenv("EDITOR_BYTES", "131072", 1);
     setenv("EDITOR_WITNESS", witness, 1);
@@ -1563,7 +1566,6 @@ static void t_copymode_big_answer(void) {
     /* The editor finishing its writing is the thing under test: with nobody
      * draining the pipe it stops part way and this file never appears. The
      * witness above only says it started. */
-    snprintf(done, sizeof done, "%s.done", witness);
     if (!wait_file(done, 20000)) {
         fail(name, "the editor never finished writing: it is blocked part "
                    "way, with nobody draining the pipe it writes into");
