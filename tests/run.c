@@ -2069,6 +2069,43 @@ static void t_tiny_screen(void) {
     reap();
 }
 
+/* Typing while a window is pouring out output must not cost you the keyboard.
+ *
+ * Client.editor_fds was left at what calloc gives, which is 0, and 0 is stdin.
+ * The main loop tests it against -1 to decide whether copy mode has a filter
+ * running, so on a window that had never been in copy mode dvtm selected on the
+ * keyboard and treated it as the editor's answer pipe. It only fires when stdin
+ * and a pty are ready in the same select -- which is exactly what typing during
+ * output is -- and then dvtm read the keystroke into the paste register, or
+ * found nothing there and closed its own stdin.
+ *
+ * The window still paints afterwards, which is why this could go unnoticed:
+ * output keeps arriving and only the keyboard is gone. So the check asks dvtm
+ * to do something rather than watching it draw. */
+static void t_typing_during_output(void) {
+    static const char *const name = "typing during output keeps the keyboard";
+
+    start("sh -c 'i=0; while : ; do echo TICK$i; i=$((i+1)); done'", NULL, NULL);
+    if (!wait_screen("TICK", 6000)) {
+        fail(name, "the window never produced any output");
+        reap();
+        return;
+    }
+
+    /* Spread out, so that some of them land in the same select() as the
+     * window's output. One keystroke would be a coin toss. */
+    for (int i = 0; i < 40; i++) {
+        tty_write("z", 1);
+        settle(50);
+    }
+
+    send_chord("c");
+    check(name, wait_ids(2, 8000),
+        "Mod-c opened no second window: dvtm stopped hearing the keyboard "
+        "while the window was writing");
+    reap();
+}
+
 /* ── main ─────────────────────────────────────────────────────────────────── */
 
 static void build_terminfo(void) {
@@ -2172,6 +2209,7 @@ int main(int argc, char *argv[]) {
     t_tags();
     t_runinall();
     t_no_dropped_keys();
+    t_typing_during_output();
     t_default_color_is_not_black();
     t_fifos();
     t_hangup();

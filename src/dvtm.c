@@ -872,6 +872,11 @@ static void create(const char *args[]) {
     Client *c = calloc(1, sizeof(Client));
     if (!c)
         return;
+    /* Not zero, which is what calloc leaves and which is also stdin. The main
+     * loop tests these against -1 to decide whether copy mode has a filter
+     * running, so on a window that has never been in copy mode it selected on
+     * the keyboard and called it the editor's pipe. */
+    c->editor_fds[0] = c->editor_fds[1] = -1;
     c->tags = tagset[seltags];
     c->id = ++cmdfifo.id;
     snprintf(buf, sizeof buf, "%d", c->id);
