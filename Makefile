@@ -117,8 +117,10 @@ uninstall:
 		echo "removing ${DESTDIR}${PREFIX}/bin/$$n"; \
 		rm -f "${DESTDIR}${PREFIX}/bin/$$n"; \
 	done
-	@echo removing manual page from ${DESTDIR}${MANPREFIX}/man1
-	@rm -f ${DESTDIR}${MANPREFIX}/man1/dvtm.1
+	@echo removing manual pages from ${DESTDIR}${MANPREFIX}/man1
+	@for m in ${MANUALS}; do \
+		rm -f "${DESTDIR}${MANPREFIX}/man1/$$(basename "$$m")"; \
+	done
 
 # `man` above all: there is a directory of that name, so without this make
 # finds it, decides the target is up to date and does nothing.
