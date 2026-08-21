@@ -1390,7 +1390,8 @@ static void copymode_paste(const char *mode, const char *expect) {
  * tests/pager renders what it was given as readable text, which is the only way
  * the harness can see an escape sequence: on screen it would just be colour. */
 static void t_pagemode(void) {
-    static const char *const name = "Mod-E hands the window to a pager, in colour";
+    static const char *const name =
+        "Mod-E hands the window to a pager, in colour";
     char pager[1024], cwd[256];
 
     if (!getcwd(cwd, sizeof cwd))
@@ -2206,7 +2207,8 @@ static void t_tiny_screen(void) {
 static void t_typing_during_output(void) {
     static const char *const name = "typing during output keeps the keyboard";
 
-    start("sh -c 'i=0; while : ; do echo TICK$i; i=$((i+1)); done'", NULL, NULL);
+    start(
+        "sh -c 'i=0; while : ; do echo TICK$i; i=$((i+1)); done'", NULL, NULL);
     if (!wait_screen("TICK", 6000)) {
         fail(name, "the window never produced any output");
         reap();
@@ -2226,7 +2228,6 @@ static void t_typing_during_output(void) {
         "while the window was writing");
     reap();
 }
-
 
 /* ── the window and layout commands nothing measured ──────────────────────── */
 
@@ -2323,7 +2324,8 @@ out:
 /* With no history kept there is nothing to scroll back to, and asking must
  * leave the screen where it is rather than move it somewhere blank. */
 static void t_scrollback_no_history(void) {
-    static const char *const name = "with no history there is nothing to scroll";
+    static const char *const name =
+        "with no history there is nothing to scroll";
     const char *args[4];
 
     setenv("FILL_LINES", "100", 1);
@@ -2397,10 +2399,10 @@ static void t_zoom(void) {
     settle(800);
 
     snprintf(why, sizeof why,
-        "%s was window 2 and zooming should make it window 1: '%s | #1'=%d",
-        W2, W2, screen_has(W2 " | #1"));
-    check("Mod-Enter moves a window to the master area",
-        screen_has(W2 " | #1"), why);
+        "%s was window 2 and zooming should make it window 1: '%s | #1'=%d", W2,
+        W2, screen_has(W2 " | #1"));
+    check("Mod-Enter moves a window to the master area", screen_has(W2 " | #1"),
+        why);
     reap();
 }
 
@@ -2521,19 +2523,18 @@ static void t_bar(void) {
 
     send_chord("s");
     settle(800);
-    check("Mod-s shows it again",
-        screen_find("[1][2]", &at) && at.row == 0,
+    check("Mod-s shows it again", screen_find("[1][2]", &at) && at.row == 0,
         "the tag list did not come back at the top");
 
     send_chord("S");
     settle(800);
-    snprintf(why, sizeof why, "the bar should move to the last row, and is at %d",
+    snprintf(why, sizeof why,
+        "the bar should move to the last row, and is at %d",
         screen_find("[1][2]", &at) ? at.row : -1);
     check("Mod-S moves the bar to the foot",
         screen_find("[1][2]", &at) && at.row == ROWS - 1, why);
     reap();
 }
-
 
 /* ── the flags nothing measured ───────────────────────────────────────────── */
 
@@ -2550,7 +2551,8 @@ static void t_flag_title(void) {
     args[3] = NULL;
     start_argv(args);
     wait_screen("TITLED", 6000);
-    check("-t sets the terminal's title", wait_bytes("\033]0;DVTMTITLE\007", 4000),
+    check("-t sets the terminal's title",
+        wait_bytes("\033]0;DVTMTITLE\007", 4000),
         "dvtm never asked the outer terminal for the title it was given");
     reap();
 }

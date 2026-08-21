@@ -51,8 +51,8 @@ static void tile(void) {
     if (n > m) {
         ny = way + mh;
         for (i = 1; i < m; i++) {
-            mvaddch(ny, nx - 1,
-                (th && (ny - 1) % th == 0) ? ACS_PLUS : ACS_RTEE);
+            mvaddch(
+                ny, nx - 1, (th && (ny - 1) % th == 0) ? ACS_PLUS : ACS_RTEE);
             ny += mh;
         }
     }
