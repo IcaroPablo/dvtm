@@ -1983,6 +1983,50 @@ static void t_no_dropped_keys(void) {
     reap();
 }
 
+/* More windows than the screen has rows for.
+ *
+ * tile draws a cross where a master boundary meets a stack one, and worked out
+ * where by taking a remainder against the height of a stacked window. Squeeze
+ * the screen until that height is zero -- five windows on three rows, two of
+ * them in the master area -- and it is a division by zero.
+ *
+ * Read this check honestly: on x86-64 that is SIGFPE and dvtm is gone, but
+ * arm64 defines the instruction to return the dividend, so on a machine like
+ * that this passes whether or not the guard is there. It is kept because it
+ * costs one case and it does fail where the fault is real, and because "dvtm
+ * survives a screen too small for its windows" is worth asserting either way.
+ *
+ * Liveness, not a picture: the screen model here stays at the old size, so the
+ * question is whether dvtm still answers, and a new window is the answer. */
+static void t_tiny_screen(void) {
+    static const char *const name = "many windows on a screen too small to fit";
+    size_t before;
+
+    start("tests/probe mark TINY", NULL, NULL);
+    if (!wait_screen("TINY", 6000)) {
+        fail(name, "the first window never appeared");
+        reap();
+        return;
+    }
+    for (int i = 0; i < 4; i++) {
+        send_chord("c");
+        settle(200);
+    }
+    send_chord("i"); /* two windows in the master area */
+    settle(300);
+
+    resize_tty(3, COLS);
+    settle(1500);
+
+    before = olen;
+    send_chord("c");
+    settle(1500);
+    check(name, olen > before,
+        "dvtm wrote nothing after being asked for another window: it died "
+        "arranging five of them on three rows");
+    reap();
+}
+
 /* ── main ─────────────────────────────────────────────────────────────────── */
 
 static void build_terminfo(void) {
@@ -2081,6 +2125,7 @@ int main(int argc, char *argv[]) {
     t_focus();
     t_focus_moves();
     t_layouts();
+    t_tiny_screen();
     t_tags();
     t_runinall();
     t_no_dropped_keys();

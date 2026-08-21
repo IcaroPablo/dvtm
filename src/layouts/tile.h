@@ -39,11 +39,20 @@ static void tile(void) {
         i++;
     }
 
-    /* Fill in nmaster intersections */
+    /* Fill in nmaster intersections: a cross where a master boundary lines up
+     * with a stack one, a tee where it does not.
+     *
+     * th is a row count and reaches zero once there are more stacked windows
+     * than rows to give them -- a dozen windows on a six-row terminal. There is
+     * then nothing for a boundary to line up with, so the cross is never right,
+     * and `% th` was a division by zero. It is SIGFPE on x86-64; on arm64 the
+     * instruction is defined to return the dividend, so this can be dismissed
+     * as theoretical on the wrong machine. */
     if (n > m) {
         ny = way + mh;
         for (i = 1; i < m; i++) {
-            mvaddch(ny, nx - 1, ((ny - 1) % th ? ACS_RTEE : ACS_PLUS));
+            mvaddch(ny, nx - 1,
+                (th && (ny - 1) % th == 0) ? ACS_PLUS : ACS_RTEE);
             ny += mh;
         }
     }
