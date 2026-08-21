@@ -11,3 +11,4 @@
 /tests/bar.*
 /tests/witness.*
 *.dSYM/
+/tests/hup.*

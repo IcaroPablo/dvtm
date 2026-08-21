@@ -63,11 +63,16 @@ tests/run: tests/run.c
 tests/probe: tests/probe.c
 	${CC} ${DVTM_CFLAGS} $< ${LDFLAGS} -o $@
 
+# The witness files are how the suite tells "the editor ran" from "it never
+# did". They are unlinked as each case ends, but a case that dies part way
+# leaves its own behind, and .gitignore then hides them for good.
 clean:
 	@echo cleaning
 	@rm -f dvtm
 	@rm -f tests/run tests/probe
 	@rm -rf tests/terminfo
+	@rm -f tests/witness.* tests/cmd.* tests/bar.* tests/hup.*
+	@rm -f ${MANUALS:=.html}
 	@rm -rf *.dSYM
 
 dist: clean

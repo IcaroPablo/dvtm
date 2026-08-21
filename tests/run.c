@@ -1406,13 +1406,15 @@ out:
 static void t_paste_large(void) {
     static const char *const name =
         "a paste larger than the pty does not wedge dvtm";
-    char witness[512], cwd[256];
+    char witness[512], done[540], cwd[256];
 
     if (!getcwd(cwd, sizeof cwd))
         die("getcwd: %s", strerror(errno));
     snprintf(
         witness, sizeof witness, "%s/tests/witness.b.%d", cwd, (int)getpid());
+    snprintf(done, sizeof done, "%s.done", witness);
     unlink(witness);
+    unlink(done);
     setenv("EDITOR_MODE", "big", 1);
     setenv("EDITOR_BYTES", "32768", 1);
     setenv("EDITOR_WITNESS", witness, 1);
@@ -1438,6 +1440,7 @@ static void t_paste_large(void) {
 out:
     reap();
     unlink(witness);
+    unlink(done);
     unsetenv("EDITOR_MODE");
     unsetenv("EDITOR_BYTES");
     unsetenv("EDITOR_WITNESS");
