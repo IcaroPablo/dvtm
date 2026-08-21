@@ -966,7 +966,9 @@ static void copymode(const char *args[]) {
     argv[1] = argline;
 
     char *cwd = getcwd_by_pid(sel);
-    if (term_forkpty(sel->editor, args[0], argv, cwd, NULL, to, from) < 0) {
+    pid_t pid = term_forkpty(sel->editor, args[0], argv, cwd, NULL, to, from);
+    free(cwd);
+    if (pid < 0) {
         term_destroy(sel->editor);
         sel->editor = NULL;
         return;
