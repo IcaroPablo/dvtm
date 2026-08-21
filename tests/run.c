@@ -2227,6 +2227,313 @@ static void t_typing_during_output(void) {
     reap();
 }
 
+
+/* ── the window and layout commands nothing measured ──────────────────────── */
+
+/* Where a window's title bar sits. A window is named by the marker in the
+ * command that created it, which is also what dvtm titles it with. */
+static bool title_at(const char *marker, VTermPos *at) {
+    char pat[64];
+    snprintf(pat, sizeof pat, "%s | #", marker);
+    return screen_find(pat, at);
+}
+
+/* Where a window's body starts, which is its left edge.
+ *
+ * The title bar is no proxy for that: dvtm cuts a title to fit, so a window
+ * that narrows loses characters off the end of its title and the marker stops
+ * matching there. The body prints the marker at the window's own column
+ * whatever the width.
+ *
+ * Searched from the bottom, because the marker appears twice on a wide enough
+ * window -- in the title and in the body -- and the body is the lower of the
+ * two. */
+static bool body_at(const char *marker, VTermPos *at) {
+    char line[COLS + 8];
+
+    for (int r = ROWS - 1; r >= 0; r--) {
+        char *hit;
+        screen_row(r, line, sizeof line);
+        if ((hit = strstr(line, marker))) {
+            at->row = r;
+            at->col = (int)(hit - line);
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Scrolling back through a window's history.
+ *
+ * The whole ring in term.c, and nothing touched it: it appeared in this file
+ * three times, every one of them inside a comment. Mod-PageUp and Shift-PageUp
+ * are separate bindings and both are checked, because they reach scrollback by
+ * different routes -- one through a chord, one on its own.
+ *
+ * A hundred numbered lines, so the check can name a line rather than count
+ * them. The window is 24 rows, and scrollback moves by half of that. */
+static void t_scrollback(void) {
+    const char *args[4];
+    char why[220];
+
+    setenv("FILL_LINES", "100", 1);
+    args[0] = "-h";
+    args[1] = "500";
+    args[2] = "tests/fill";
+    args[3] = NULL;
+    start_argv(args);
+    if (!wait_screen("FILLED", 10000)) {
+        fail("Mod-PageUp scrolls back", "the window never filled");
+        goto out;
+    }
+    settle(600);
+
+    snprintf(why, sizeof why,
+        "before scrolling, the live screen must show the end of the output "
+        "and not the middle: L0099=%d L0070=%d",
+        screen_has("L0099"), screen_has("L0070"));
+    check("the live screen shows the end of the output",
+        screen_has("L0099") && !screen_has("L0070"), why);
+
+    send_chord("\033[5~"); /* Mod-PageUp */
+    settle(800);
+    snprintf(why, sizeof why,
+        "half a screen back from L0099 is around L0070, and L0099 should be "
+        "off the bottom: L0070=%d L0099=%d",
+        screen_has("L0070"), screen_has("L0099"));
+    check("Mod-PageUp scrolls back",
+        screen_has("L0070") && !screen_has("L0099"), why);
+
+    send_chord("\033[6~"); /* Mod-PageDown */
+    settle(800);
+    check("Mod-PageDown comes forward again", screen_has("L0099"),
+        "scrolling forward did not return to the live screen");
+
+    tty_write("\033[5;2~", 6); /* Shift-PageUp, its own binding */
+    settle(800);
+    check("Shift-PageUp scrolls back too", screen_has("L0070"),
+        "Shift-PageUp is bound to scrollback with no modifier, and did "
+        "nothing");
+
+out:
+    reap();
+    unsetenv("FILL_LINES");
+}
+
+/* With no history kept there is nothing to scroll back to, and asking must
+ * leave the screen where it is rather than move it somewhere blank. */
+static void t_scrollback_no_history(void) {
+    static const char *const name = "with no history there is nothing to scroll";
+    const char *args[4];
+
+    setenv("FILL_LINES", "100", 1);
+    args[0] = "-h";
+    args[1] = "0";
+    args[2] = "tests/fill";
+    args[3] = NULL;
+    start_argv(args);
+    if (!wait_screen("FILLED", 10000)) {
+        fail(name, "the window never filled");
+        goto out;
+    }
+    settle(600);
+
+    send_chord("\033[5~");
+    settle(800);
+    check(name, screen_has("L0099") && !screen_has("L0070"),
+        "the screen moved: dvtm scrolled into a history it was told not to "
+        "keep");
+
+out:
+    reap();
+    unsetenv("FILL_LINES");
+}
+
+/* Minimising leaves a window as one row at the foot of the screen.
+ *
+ * Counted in screen rows: a window shows its marker twice, once in the title
+ * bar and once in the body, and minimising takes the body away. */
+static void t_minimize(void) {
+    VTermPos at;
+    char why[220];
+    int before;
+
+    if (!start_three("Mod-. minimises the focused window"))
+        return;
+    settle(600);
+    before = screen_count(W1);
+
+    send_chord(".");
+    settle(800);
+    snprintf(why, sizeof why,
+        "a minimised window keeps its title bar and loses its body, on the "
+        "last row: rows showing %s were %d, now %d; title row %d",
+        W1, before, screen_count(W1), title_at(W1, &at) ? at.row : -1);
+    check("Mod-. minimises the focused window",
+        before == 2 && screen_count(W1) == 1 && title_at(W1, &at) &&
+            at.row == ROWS - 1,
+        why);
+
+    /* Mod-<n> and not a second Mod-., which would minimise something else:
+     * minimising moves the focus away, so the toggle no longer has the
+     * minimised window to act on. Focusing one by number brings it back. */
+    send_chord("3");
+    settle(800);
+    check("Mod-3 brings a minimised window back", screen_count(W1) == 2,
+        "focusing the minimised window by number did not restore it");
+    reap();
+}
+
+/* Mod-Enter moves the focused window into the master area, which renumbers it
+ * as the first. */
+static void t_zoom(void) {
+    char why[200];
+
+    if (!start_three("Mod-Enter moves a window to the master area"))
+        return;
+    send_chord("2");
+    settle(400);
+    send_chord("\r");
+    settle(800);
+
+    snprintf(why, sizeof why,
+        "%s was window 2 and zooming should make it window 1: '%s | #1'=%d",
+        W2, W2, screen_has(W2 " | #1"));
+    check("Mod-Enter moves a window to the master area",
+        screen_has(W2 " | #1"), why);
+    reap();
+}
+
+/* Mod-i and Mod-d change how many windows share the master area. With one
+ * master, window 2 sits in the stack on the right; with two, it moves over to
+ * the master column beside window 1. */
+static void t_nmaster(void) {
+    VTermPos w1, w2, w3;
+    char why[240];
+
+    if (!start_three("Mod-i puts a second window in the master area"))
+        return;
+    settle(700);
+    if (!(body_at(W1, &w1) && body_at(W2, &w2) && body_at(W3, &w3))) {
+        fail("Mod-i puts a second window in the master area",
+            "could not locate all three title bars");
+        reap();
+        return;
+    }
+    snprintf(why, sizeof why,
+        "with one master, 1 is on the left and 2 and 3 share the stack: "
+        "cols %d %d %d",
+        w1.col, w2.col, w3.col);
+    check("one master area holds the first window only",
+        w1.col < w2.col && w2.col == w3.col, why);
+
+    send_chord("i");
+    settle(800);
+    if (!(body_at(W1, &w1) && body_at(W2, &w2) && body_at(W3, &w3))) {
+        fail("Mod-i puts a second window in the master area",
+            "could not locate all three title bars after Mod-i");
+        reap();
+        return;
+    }
+    snprintf(why, sizeof why,
+        "with two masters, 2 should join 1 on the left and only 3 stay in the "
+        "stack: cols %d %d %d",
+        w1.col, w2.col, w3.col);
+    check("Mod-i puts a second window in the master area",
+        w1.col == w2.col && w2.col < w3.col, why);
+
+    send_chord("d");
+    settle(800);
+    if (body_at(W1, &w1) && body_at(W2, &w2))
+        check("Mod-d takes it out again", w1.col < w2.col,
+            "the second window stayed in the master area");
+    else
+        fail("Mod-d takes it out again", "could not locate the title bars");
+    reap();
+}
+
+/* Mod-l and Mod-h move the boundary between the master area and the stack, so
+ * the stack's windows start further right or further left. Four presses, since
+ * one is five per cent of eighty columns and rounding could eat a single
+ * step. */
+static void t_mfact(void) {
+    VTermPos before, after, back;
+    char why[220];
+
+    if (!start_three("Mod-l widens the master area"))
+        return;
+    settle(700);
+    if (!body_at(W2, &before)) {
+        fail("Mod-l widens the master area", "could not locate a stack title");
+        reap();
+        return;
+    }
+
+    for (int i = 0; i < 4; i++)
+        send_chord("l");
+    settle(900);
+    if (!body_at(W2, &after)) {
+        fail("Mod-l widens the master area",
+            "could not locate the stack title after widening");
+        reap();
+        return;
+    }
+    snprintf(why, sizeof why,
+        "a wider master area pushes the stack right: stack title was at "
+        "column %d, now %d",
+        before.col, after.col);
+    check("Mod-l widens the master area", after.col > before.col, why);
+
+    for (int i = 0; i < 4; i++)
+        send_chord("h");
+    settle(900);
+    if (body_at(W2, &back))
+        check("Mod-h narrows it again", back.col < after.col,
+            "the master area stayed wide");
+    else
+        fail("Mod-h narrows it again", "could not locate the stack title");
+    reap();
+}
+
+/* Mod-s hides and shows the bar, Mod-S moves it between the top and the foot.
+ * Two windows, because with one the bar hides itself. */
+static void t_bar(void) {
+    VTermPos at;
+    char why[200];
+
+    start("tests/probe mark " W2, "tests/probe mark " W1, NULL);
+    if (!wait_ids(2, 6000)) {
+        fail("Mod-s hides the bar", "the two windows never appeared");
+        reap();
+        return;
+    }
+    settle(700);
+    if (!screen_find("[1][2]", &at) || at.row != 0) {
+        fail("Mod-s hides the bar", "the bar is not at the top to begin with");
+        reap();
+        return;
+    }
+
+    send_chord("s");
+    settle(800);
+    check("Mod-s hides the bar", !screen_has("[1][2]"),
+        "the tag list is still on screen");
+
+    send_chord("s");
+    settle(800);
+    check("Mod-s shows it again",
+        screen_find("[1][2]", &at) && at.row == 0,
+        "the tag list did not come back at the top");
+
+    send_chord("S");
+    settle(800);
+    snprintf(why, sizeof why, "the bar should move to the last row, and is at %d",
+        screen_find("[1][2]", &at) ? at.row : -1);
+    check("Mod-S moves the bar to the foot",
+        screen_find("[1][2]", &at) && at.row == ROWS - 1, why);
+    reap();
+}
+
 /* ── main ─────────────────────────────────────────────────────────────────── */
 
 static void build_terminfo(void) {
@@ -2328,6 +2635,13 @@ int main(int argc, char *argv[]) {
     t_focus();
     t_focus_moves();
     t_layouts();
+    t_nmaster();
+    t_mfact();
+    t_zoom();
+    t_minimize();
+    t_bar();
+    t_scrollback();
+    t_scrollback_no_history();
     t_tiny_screen();
     t_tags();
     t_runinall();

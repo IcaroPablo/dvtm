@@ -88,9 +88,10 @@ binding, including the ones not mentioned below.
 
 New windows are created with `MOD+c` and closed with `MOD+x x`. Switch between
 them with `MOD+j` and `MOD+k`, or jump straight to one with `MOD+[1..9]` — the
-digit is the window number shown in the title bar. `MOD+.` minimises and
-restores a window, and `MOD+a` sends what you type to every visible window at
-once until you press it again. `MOD+q q` quits dvtm.
+digit is the window number shown in the title bar. `MOD+.` minimises a window
+to a single line at the foot of the screen, and `MOD+[1..9]` brings it back.
+`MOD+a` sends what you type to every visible window at once until you press it
+again. `MOD+q q` quits dvtm.
 
 `Shift+PageUp` and `Shift+PageDown` scroll back through a window's history. How
 much history is kept is set with `dvtm -h lines`.
