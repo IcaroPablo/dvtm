@@ -90,7 +90,7 @@ dvtm|dynamic virtual terminal manager,
 	kf19=\E[33~,
 	kf20=\E[34~,
 	kf21=\E[23$,
-	kf22=\E[24$
+	kf22=\E[24$,
 	kfnd=\E[1~,
 	khome=\E[7~,
 	kich1=\E[2~,
