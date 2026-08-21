@@ -12,7 +12,7 @@ thing — *dynamic* window management on the console — and delegate the rest.
 Session management is [abduco](https://www.brain-dump.org/projects/abduco/)'s
 job, not dvtm's. Selecting text in copy mode is the editor's job. Emulating a
 terminal is libvterm's job, which is what this fork changed. What is left is
-about 3100 lines of C, small enough to read in an afternoon and hack on.
+about 3300 lines of C, small enough to read in an afternoon and hack on.
 
 That delegation is the whole design argument. The host terminal is already an
 emulator; a second one inside dvtm meant every byte was parsed twice, stored

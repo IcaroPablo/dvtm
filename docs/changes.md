@@ -13,7 +13,7 @@ defects lived. It now sits on
 uses.
 
     before   dvtm.c 1992 + vt.c 1972 + vt.h 67                     = 4031 lines
-    after    dvtm.c 1827 + term.c 639 + ui.c 304 + headers 332     = 3102 lines
+    after    dvtm.c 1867 + term.c 697 + ui.c 334 + headers 365     = 3263 lines
 
 ## Fixed
 

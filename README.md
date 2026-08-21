@@ -14,7 +14,7 @@ inside dvtm is gone**, and libvterm does that work now.
 
   * **The terminal emulator is gone.** `vt.c` was half the program, and the
     half the defects lived in. That work is [libvterm]'s now — the same
-    emulator neovim uses. 4031 lines became 3102.
+    emulator neovim uses. 4031 lines became 3263.
   * dvtm froze completely the first time any signal woke it.
   * Keystrokes typed quickly or pasted together were dropped; only the first
     of each batch was read.
@@ -178,7 +178,7 @@ listed in [docs/changes.md](docs/changes.md).
 Goals
 
   * Dynamic tiling window management on the console, and nothing else.
-  * Small enough to read in an afternoon: about 3100 lines of C.
+  * Small enough to read in an afternoon: about 3300 lines of C.
   * Plain C99, checked under `-pedantic`, with no `#ifdef` in the source
     naming an operating system.
   * A suite that drives the real binary and asserts on what it paints, and
