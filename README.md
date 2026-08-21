@@ -69,8 +69,9 @@ is there, is in [docs/development.md](docs/development.md).
     make && make install
 
 which installs to `~/.local`; pass `PREFIX=/usr/local` or similar for anywhere
-else. `CFLAGS` is yours — what you pass is appended after the build's own flags,
-so it wins on anything repeatable and cannot delete the include paths:
+else. `CFLAGS` and `CPPFLAGS` are yours — what you pass is appended after the
+build's own flags, so it wins on anything repeatable and cannot delete the
+include paths:
 
     make CFLAGS='-O2 -march=native'
 

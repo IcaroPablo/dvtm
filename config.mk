@@ -53,7 +53,12 @@ INCS = -I. -Isrc -Isrc/layouts ${NCURSES_CFLAGS} ${VTERM_CFLAGS}
 LIBS = ${NCURSES_LIBS} ${VTERM_LIBS}
 # _DARWIN_C_SOURCE brings back SIGWINCH, which _POSIX_C_SOURCE hides on macOS;
 # every other system just ignores the macro.
-CPPFLAGS = -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -D_XOPEN_SOURCE_EXTENDED -D_DARWIN_C_SOURCE
+#
+# Its own variable, and not CPPFLAGS, for the same reason DVTM_CFLAGS exists:
+# CPPFLAGS is the user's, every ports tree sets it, and while these four lived
+# there a `make CPPFLAGS=-DFOO` deleted them. Without _XOPEN_SOURCE=700 a C99
+# build gets no posix_openpt, ptsname or realpath from glibc, and stops.
+DVTM_CPPFLAGS = -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -D_XOPEN_SOURCE_EXTENDED -D_DARWIN_C_SOURCE
 # Warn by default. Without this the normal build passes no -W flags at all and
 # a new warning goes unseen until someone happens to run `make debug`.
 # -Wno-unused-parameter because every key binding takes an args[] it ignores.
@@ -64,11 +69,11 @@ CPPFLAGS = -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -D_XOPEN_SOURCE_EXTENDE
 STD = -std=c99
 WARNINGS = -Wall -Wextra -Wno-unused-parameter
 
-# The flags dvtm cannot build without, with your CFLAGS last so that they win
-# on anything that can be repeated (-O, -std, -W...). They are kept apart on
-# purpose: every ports tree and package build sets CFLAGS, and while the two
-# shared one variable, a `make CFLAGS=-O2` deleted the include paths along with
-# everything else and the build stopped at 'vterm.h' file not found.
-DVTM_CFLAGS = ${STD} ${INCS} -DNDEBUG ${WARNINGS} ${CPPFLAGS} ${CFLAGS}
+# The flags dvtm cannot build without, with your CPPFLAGS and CFLAGS last so
+# that they win on anything that can be repeated (-O, -std, -W...). They are
+# kept apart on purpose: every ports tree and package build sets these, and
+# while they shared one variable, a `make CFLAGS=-O2` deleted the include paths
+# along with everything else and the build stopped at 'vterm.h' file not found.
+DVTM_CFLAGS = ${STD} ${INCS} -DNDEBUG ${WARNINGS} ${DVTM_CPPFLAGS} ${CPPFLAGS} ${CFLAGS}
 
 CC ?= cc
