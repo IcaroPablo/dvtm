@@ -325,8 +325,19 @@ pid_t term_forkpty(Term *t, const char *p, const char *argv[], const char *cwd,
         from = NULL;
     }
 
-    if ((pid = pty_fork(&t->pty, &ws)) < 0)
+    if ((pid = pty_fork(&t->pty, &ws)) < 0) {
+        if (to) {
+            close(vt2ed[0]);
+            close(vt2ed[1]);
+            *to = -1;
+        }
+        if (from) {
+            close(ed2vt[0]);
+            close(ed2vt[1]);
+            *from = -1;
+        }
         return -1;
+    }
 
     if (pid == 0) {
         sigset_t emptyset;

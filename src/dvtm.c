@@ -910,6 +910,16 @@ static void create(const char *args[]) {
     c->pid = term_forkpty(c->term, shell, pargs, cwd, env, NULL, NULL);
     if (args && args[2] && !strcmp(args[2], "$CWD"))
         free(cwd);
+    /* A client that could not be forked has no pty, and every pass of the main
+     * loop would then hand select() a descriptor of -1 and wait for a window
+     * that can never draw, print or die. There is nothing to show, so do not
+     * attach it. */
+    if (c->pid < 0) {
+        term_destroy(c->term);
+        delwin(c->window);
+        free(c);
+        return;
+    }
     c->term->data = c;
     c->term->title_handler = term_title_handler;
     c->term->urgent_handler = term_urgent_handler;
