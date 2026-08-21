@@ -9,6 +9,7 @@
  * Printing results as text is what keeps the assertions honest: the harness
  * never has to guess whether an escape sequence was swallowed by dvtm or never
  * sent, because the probe reports what it actually received. */
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -221,8 +222,34 @@ int main(int argc, char *argv[]) {
         fflush(stdout);
     }
 
-    /* Stay alive so the window persists until the test kills it. */
-    for (;;)
-        pause();
+    /* Stay alive so the window persists, and go when the window does.
+     *
+     * This used to be `for (;;) pause();`, which outlived dvtm. Killing dvtm
+     * closes the pty master, and on macOS that gives the slave an end of file
+     * rather than a SIGHUP -- so a probe that never reads never learns its
+     * terminal is gone. Every run left one behind per window, and several
+     * hundred of them exhaust the ptys, at which point windows stop opening
+     * and half the suite fails for reasons that are not in dvtm. */
+    for (;;) {
+        char discard[64];
+        fd_set r;
+        ssize_t n;
+
+        FD_ZERO(&r);
+        FD_SET(STDIN_FILENO, &r);
+        /* select first: the modes above leave the terminal at VMIN 0, where a
+         * read returns 0 straight away rather than waiting, and the probe
+         * would exit the moment it had printed its answer. */
+        if (select(STDIN_FILENO + 1, &r, NULL, NULL, NULL) < 0) {
+            if (errno == EINTR)
+                continue;
+            break;
+        }
+        n = read(STDIN_FILENO, discard, sizeof discard);
+        if (n < 0 && errno == EINTR)
+            continue;
+        if (n <= 0)
+            break;
+    }
     return 0;
 }
