@@ -507,17 +507,22 @@ static void wake_main_loop(void) {
 
 /* Reap exited children and mark their clients dead.
  *
- * Called from the main loop rather than left to the signal handler alone.
- * SIGCHLD is blocked outside select() so that getch() is never interrupted,
- * and on macOS the signal was observed staying pending and blocked
- * indefinitely: the handler never ran, the client was never marked dead, and
- * its window stayed on screen for as long as you cared to wait. Polling costs
- * one waitpid per wakeup and cannot be lost. */
+ * The main loop does this, and the handler below only wakes it. SIGCHLD is
+ * blocked outside select() so that a handler firing inside get_wch() cannot
+ * drop a keystroke, and on macOS the signal was observed staying pending and
+ * blocked indefinitely: reaping from the handler meant the client was never
+ * marked dead and its window stayed on screen for as long as you cared to
+ * wait. Reaping here cannot be lost, and costs one waitpid per wakeup.
+ *
+ * It is also the only way this can be written honestly. The handler used to
+ * carry a second copy of this loop and called eprint() and strerror() from
+ * inside it, neither of which may be called from a signal handler. */
 static void reap_children(void) {
     int status;
     pid_t pid;
 
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        debug("child with pid %d died\n", pid);
         for (Client *c = clients; c; c = c->next) {
             if (c->pid == pid) {
                 c->died = true;
@@ -531,38 +536,9 @@ static void reap_children(void) {
     }
 }
 
+/* async-signal-safe: only write(2), by way of wake_main_loop */
 static void sigchld_handler(int sig) {
-    int errsv = errno;
-    int status;
-    pid_t pid;
-
-    while ((pid = waitpid(-1, &status, WNOHANG)) != 0) {
-        if (pid == -1) {
-            if (errno == ECHILD) {
-                /* no more child processes */
-                break;
-            }
-            eprint("waitpid: %s\n", strerror(errno));
-            break;
-        }
-
-        debug("child with pid %d died\n", pid);
-
-        wake_main_loop();
-
-        for (Client *c = clients; c; c = c->next) {
-            if (c->pid == pid) {
-                c->died = true;
-                break;
-            }
-            if (c->editor && c->editor->pid == pid) {
-                c->editor_died = true;
-                break;
-            }
-        }
-    }
-
-    errno = errsv;
+    wake_main_loop();
 }
 
 static void sigwinch_handler(int sig) {
@@ -1748,14 +1724,17 @@ int main(int argc, char *argv[]) {
         r = select(nfds + 1, &rd, &wr, NULL, NULL);
         sigprocmask(SIG_BLOCK, &blockset, NULL);
 
+        /* Before the EINTR check, not after: a signal arriving during select
+         * is exactly when a child has just died, and `continue` would skip
+         * the reaping until something else happened to wake the loop. */
+        reap_children();
+
         if (r < 0) {
             if (errno == EINTR)
                 continue;
             perror("select()");
             exit(EXIT_FAILURE);
         }
-
-        reap_children();
 
         if (sigpipe[0] != -1 && FD_ISSET(sigpipe[0], &rd)) {
             char discard[64];

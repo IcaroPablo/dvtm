@@ -51,7 +51,7 @@ struct Client {
     Term *term;
     Term *editor, *app;
     int editor_fds[2];
-    volatile sig_atomic_t editor_died;
+    bool editor_died;
     /* What this window's editor has handed back so far, kept apart from
      * copyreg until the editor is gone: one that hands back nothing leaves the
      * last copy where it was. Per window, because two windows can be in copy
@@ -69,7 +69,7 @@ struct Client {
     bool has_title_line;
     bool minimized;
     bool urgent;
-    volatile sig_atomic_t died;
+    bool died;
     Client *next;
     Client *prev;
     Client *snext;

@@ -842,6 +842,31 @@ static void t_kill_removes_window(void) {
     reap();
 }
 
+/* A window whose program ends by itself has to go, the same as one that is
+ * killed.
+ *
+ * dvtm learns this two ways -- waitpid in the main loop, and EOF on the pty --
+ * and the check covers the pair, not either one alone. That is deliberate: what
+ * matters is that the window goes, and pretending to isolate the reaping would
+ * be a lie, since disabling it leaves the other route working.
+ *
+ * Three windows because dvtm draws no title bar when one is left, and the ids
+ * are what is being counted. */
+static void t_exit_removes_window(void) {
+    static const char *const name = "a window whose program exits goes away";
+
+    start("tests/probe mark W", "tests/probe mark W", "sh -c 'echo GOING'");
+    if (!wait_ids(3, 6000)) {
+        fail(name, "the three windows never all appeared");
+        reap();
+        return;
+    }
+    check(name, wait_ids(2, 8000),
+        "the shell printed and exited, and its window is still on screen: "
+        "nothing reaped the child and nothing noticed its pty hang up");
+    reap();
+}
+
 /* MOD is a control byte, so it cannot be written inline: "\x07f" is one byte,
  * 0x7f, because a hex escape swallows every hex digit that follows it. */
 static void send_chord(const char *keys) {
@@ -2019,6 +2044,7 @@ int main(int argc, char *argv[]) {
     t_paste_unannounced();
     t_paste_unasked();
     t_kill_removes_window();
+    t_exit_removes_window();
     t_window_ids();
     t_focus();
     t_focus_moves();
