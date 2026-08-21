@@ -109,8 +109,6 @@ static int32_t nearest_color(int r, int g, int b) {
 /* The 256-colour palette as rgb. Kept identical to what vt.c produced, so a
  * program's colours do not shift underneath the user when the engine changes. */
 static int32_t index_rgb(int i) {
-    if (i < 8)
-        return ansi[i];
     if (i < 16)
         return ansi[i];
     if (i < 232) {
