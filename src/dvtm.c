@@ -1621,7 +1621,9 @@ static bool parse_args(int argc, char *argv[]) {
             usage();
         switch (argv[arg][1]) {
             case 'v':
-                puts("dvtm-" VERSION " © 2007-2016 Marc André Tanner");
+                puts("dvtm-" VERSION);
+                puts("© 2007-2016 Marc André Tanner");
+                puts("© 2026 Ícaro Andrade");
                 exit(EXIT_SUCCESS);
             case 'M':
                 mouse_events_enabled = !mouse_events_enabled;
