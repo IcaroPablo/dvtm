@@ -72,9 +72,10 @@ const char tags[][8] = { "1", "2", "3", "4", "5" };
 #include "stack.h"
 #include "fullscreen.h"
 /* stack.h also carries tstack, the same layout with the masters at the bottom.
- * Also in the source tree and not enabled here: vstack.h (vstack) and
- * fibonacci.h (spiral, dwindle). Add a line to layouts[] to use one, and the
- * include above if it is not already there. */
+ * Also in the source tree and not enabled here: vstack.h (vstack, one
+ * full-width window per row -- not the vertical stack on Mod-f, which is
+ * tile) and fibonacci.h (spiral, dwindle). Add a line to layouts[] to use
+ * one, and the include above if it is not already there. */
 
 /* by default the first layout entry is used */
 static Layout layouts[] = {

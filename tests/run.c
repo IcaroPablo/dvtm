@@ -973,13 +973,13 @@ static void t_layouts(void) {
     settle(700);
     if (screen_find(W1 " | #1", &a) && screen_find(W2 " | #2", &b)) {
         snprintf(why, sizeof why,
-            "expected the tile symbol in the bar and the master area on the "
-            "left: symbol=%d, #1 col %d, #2 col %d",
+            "expected the vertical stack symbol in the bar and the master area "
+            "on the left: symbol=%d, #1 col %d, #2 col %d",
             screen_has("[5][]="), a.col, b.col);
-        check("Mod-f selects tile, master area on the left",
+        check("Mod-f selects the vertical stack, master area on the left",
             screen_has("[5][]=") && a.col < b.col, why);
     } else {
-        fail("Mod-f selects tile, master area on the left",
+        fail("Mod-f selects the vertical stack, master area on the left",
             "could not locate both title bars");
     }
 

@@ -1,6 +1,10 @@
 #include "dvtm.h"
 
-/* A vertical stack layout, all windows have the full screen width. */
+/* One window per row, each the full width of the screen.
+ *
+ * Not what the README calls the vertical stack -- that is tile, on Mod-f.
+ * The name here is upstream's and stays, so a config.h brought over from
+ * upstream dvtm still builds. */
 static void vstack(void) {
     unsigned int i, n, ny, nh, m, mh, th;
     Client *c;
