@@ -14,7 +14,7 @@ inside dvtm is gone**, and libvterm does that work now.
 
   * **The terminal emulator is gone.** `vt.c` was half the program, and the
     half the defects lived in. That work is [libvterm]'s now — the same
-    emulator neovim uses. 4031 lines became 3263.
+    emulator neovim uses. 4031 lines became 3342.
   * dvtm froze completely the first time any signal woke it.
   * Keystrokes typed quickly or pasted together were dropped; only the first
     of each batch was read.
