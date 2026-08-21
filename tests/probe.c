@@ -209,6 +209,14 @@ int main(int argc, char *argv[]) {
         printable(buf, n, pretty, sizeof pretty);
         printf("PASTE=%s\n", pretty);
         fflush(stdout);
+    } else if (!strcmp(what, "combining")) {
+        /* One cell holding a base letter and a combining mark. libvterm keeps
+         * both in the cell; painting emits both, and copy mode used to take
+         * only the first, so the accent was dropped on the way to the editor
+         * and the paste register. The X and Y bracket it so the check can
+         * match the run of bytes rather than a stray 65 anywhere. */
+        printf("Xe\xcc\x81Y\n");
+        fflush(stdout);
     } else if (!strcmp(what, "plain")) {
         /* Deliberately no SGR at all: these cells must come out in the
          * terminal's default colours, not in some colour of dvtm's choosing. */

@@ -28,6 +28,9 @@
 #          content check
 #   multi  save three short lines: the shape of the report, since a one-line
 #          paste is exactly the case that always worked
+#   hex    write the bytes it was handed, in hex, to $EDITOR_WITNESS.hex, and
+#          save nothing. For claims about what dvtm put in the file, which
+#          never reach a screen the harness can read
 #   stay   two runs, counted in $EDITOR_SEQ: the first saves PASTEME and
 #          leaves, the second saves SECONDTEXT and never exits. That is an
 #          editor sitting on a saved buffer -- `:w` without `:q` -- and it is
@@ -55,6 +58,8 @@ big) awk -v n="${EDITOR_BYTES:-65536}" 'BEGIN {
      [ -n "$EDITOR_WITNESS" ] && : > "$EDITOR_WITNESS.done" ;;
 fail) printf 'PASTEME\n' > "$f"; exit 3 ;;
 multi) printf 'L1\nL2\nL3\n' > "$f" ;;
+hex) od -An -v -tx1 "$f" | tr -d ' \n' > "$EDITOR_WITNESS.hex"
+     [ -n "$EDITOR_WITNESS" ] && : > "$EDITOR_WITNESS.done" ;;
 stay) n=0
       [ -f "$EDITOR_SEQ" ] && n=$(cat "$EDITOR_SEQ")
       n=$((n + 1))

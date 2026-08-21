@@ -335,6 +335,21 @@ static bool wait_screen_gone(const char *text, int ms) {
     return !screen_has(text);
 }
 
+/* What a file holds, for claims about what dvtm handed a filter. That never
+ * reaches a screen, so it cannot be read off one. */
+static bool file_contains(const char *path, const char *needle) {
+    char buf[1 << 16];
+    size_t n;
+    FILE *f = fopen(path, "r");
+
+    if (!f)
+        return false;
+    n = fread(buf, 1, sizeof buf - 1, f);
+    fclose(f);
+    buf[n] = '\0';
+    return strstr(buf, needle) != NULL;
+}
+
 static bool wait_file(const char *path, int ms) {
     struct stat st;
     long deadline = now_ms() + ms;
@@ -1460,6 +1475,59 @@ out:
     unsetenv("PAGER_STALL");
 }
 
+/* A cell can hold a base letter and a combining mark, and copy mode has to
+ * hand over both.
+ *
+ * Painting walks every character in the cell; copy mode took chars[0] and
+ * stopped, so an accent that was on the screen was not in the editor and not in
+ * anything pasted back. It used wctomb where painting uses wcrtomb with its own
+ * state, too -- the same job, done two ways, in two functions over one cell.
+ *
+ * Asserted on the file dvtm wrote, not on a screen: the harness renders
+ * anything above ASCII as '?', so the screen cannot tell the two apart. */
+static void t_copymode_combining(void) {
+    static const char *const name = "copy mode keeps a combining mark";
+    char witness[512], hex[540], done[540], cwd[256];
+
+    if (!getcwd(cwd, sizeof cwd))
+        die("getcwd: %s", strerror(errno));
+    snprintf(
+        witness, sizeof witness, "%s/tests/witness.c.%d", cwd, (int)getpid());
+    snprintf(hex, sizeof hex, "%s.hex", witness);
+    snprintf(done, sizeof done, "%s.done", witness);
+    unlink(witness);
+    unlink(hex);
+    unlink(done);
+    setenv("EDITOR_MODE", "hex", 1);
+    setenv("EDITOR_WITNESS", witness, 1);
+
+    start("tests/probe combining", NULL, NULL);
+    if (!wait_screen("Xe", 6000)) {
+        fail(name, "the window never printed anything");
+        goto out;
+    }
+    settle(600);
+
+    send_chord("e");
+    if (!wait_file(done, 10000)) {
+        fail(name, "the editor never wrote down what it was handed");
+        goto out;
+    }
+
+    /* 58 65 cc 81 59: X, e, the two bytes of U+0301, Y. */
+    check(name, file_contains(hex, "5865cc8159"),
+        "the editor was handed the letter without its accent: copy mode read "
+        "one character out of a cell that holds two");
+
+out:
+    reap();
+    unlink(witness);
+    unlink(hex);
+    unlink(done);
+    unsetenv("EDITOR_MODE");
+    unsetenv("EDITOR_WITNESS");
+}
+
 /* The register outlives the window it came from: the README's claim is that
  * what an editor hands back goes into *any* window, and the three cases above
  * only ever paste back into the one they copied from.
@@ -2241,6 +2309,7 @@ int main(int argc, char *argv[]) {
     t_pager_stalls();
     t_copymode_paste();
     t_copymode_no_history();
+    t_copymode_combining();
     t_copymode_big_answer();
     t_copymode_unchanged();
     t_copymode_resaved();

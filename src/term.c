@@ -618,10 +618,44 @@ bool term_cursor_visible(Term *t) {
 
 /* ── copy mode ────────────────────────────────────────────────────────────── */
 
+/* One SGR for a colour dvtm has already folded to what this terminal takes.
+ * -1 is the terminal's own default, which is ESC[39m or ESC[49m. */
+static int put_color(char *s, int32_t c, bool is_fg) {
+    if (c == -1)
+        return sprintf(s, "\033[%dm", is_fg ? 39 : 49);
+    return sprintf(s, "\033[%d;2;%d;%d;%dm", is_fg ? 38 : 48,
+        (int)(c >> 16) & 0xff, (int)(c >> 8) & 0xff, (int)c & 0xff);
+}
+
+/* Every character in one cell, encoded. A cell holds a base character and up to
+ * VTERM_MAX_CHARS_PER_CELL - 1 combining marks after it, and all of them belong
+ * in the copy: painting emits them, so leaving them out here meant an accent
+ * that was on the screen was missing from the editor and from the paste.
+ *
+ * wcrtomb with its own state, and not wctomb, for the same reason term_draw
+ * uses it: the conversion carries state between characters, and a function with
+ * hidden state is one nothing else may be doing at the same time. */
+static size_t put_cell(char *s, const VTermScreenCell *cell) {
+    mbstate_t ps;
+    size_t len = 0;
+
+    memset(&ps, 0, sizeof ps);
+    for (int n = 0; n < VTERM_MAX_CHARS_PER_CELL && cell->chars[n]; n++) {
+        size_t k = wcrtomb(s + len, (wchar_t)cell->chars[n], &ps);
+        if (k == (size_t)-1)
+            break;
+        len += k;
+    }
+    return len;
+}
+
 size_t term_content_get(Term *t, char **buf, bool colored) {
     int lines = t->sb_count + t->rows;
-    size_t size = (size_t)lines *
-                  ((size_t)(t->cols + 1) * ((colored ? 64 : 0) + MB_CUR_MAX));
+    /* Per cell: two SGRs at worst, and every character the cell can hold. The
+     * spare column per line carries the reset and the newline. */
+    size_t per_cell =
+        (colored ? 64 : 0) + MB_CUR_MAX * VTERM_MAX_CHARS_PER_CELL;
+    size_t size = (size_t)lines * (size_t)(t->cols + 1) * per_cell;
     VTermScreenCell *cells;
     char *s;
 
@@ -661,21 +695,11 @@ size_t term_content_get(Term *t, char **buf, bool colored) {
                 int32_t fg = color_of(&cell->fg, true);
                 int32_t bg = color_of(&cell->bg, false);
                 if (fg != prev_fg) {
-                    s += fg == -1 ? sprintf(s, "\033[39m")
-                                  : sprintf(s,
-                                        "\033[38;2;%d;%"
-                                        "d;%dm",
-                                        (int)(fg >> 16) & 0xff,
-                                        (int)(fg >> 8) & 0xff, (int)fg & 0xff);
+                    s += put_color(s, fg, true);
                     prev_fg = fg;
                 }
                 if (bg != prev_bg) {
-                    s += bg == -1 ? sprintf(s, "\033[49m")
-                                  : sprintf(s,
-                                        "\033[48;2;%d;%"
-                                        "d;%dm",
-                                        (int)(bg >> 16) & 0xff,
-                                        (int)(bg >> 8) & 0xff, (int)bg & 0xff);
+                    s += put_color(s, bg, false);
                     prev_bg = bg;
                 }
             }
@@ -683,14 +707,11 @@ size_t term_content_get(Term *t, char **buf, bool colored) {
             if (cell->chars[0] == 0) {
                 *s++ = ' ';
             } else {
-                char mb[MB_LEN_MAX];
-                int n = wctomb(mb, (wchar_t)cell->chars[0]);
-                if (n > 0) {
-                    memcpy(s, mb, (size_t)n);
+                size_t n = put_cell(s, cell);
+                if (n)
                     s += n;
-                } else {
+                else
                     *s++ = ' ';
-                }
                 last_non_space = s;
             }
             if (cell->width > 1)
