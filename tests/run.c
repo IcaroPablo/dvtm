@@ -910,6 +910,37 @@ static void t_window_ids(void) {
     reap();
 }
 
+/* A title longer than the border must be cut, and the border must still close.
+ *
+ * dvtm titles a window with the command that made it, so a long command is a
+ * long title. Two windows, so each is forty columns wide and the title has
+ * thirty to fit in. */
+#define LONG_MARK "MARKAAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH"
+static void t_title_truncated(void) {
+    static const char *const name = "a title too long for the border is cut";
+    char why[220];
+
+    start("tests/probe mark " LONG_MARK, "tests/probe mark SHORT", NULL);
+    if (!wait_ids(2, 6000)) {
+        fail(name, "the two windows never appeared");
+        reap();
+        return;
+    }
+    settle(600);
+
+    /* The body prints the marker whole, so the title is the one place it can
+     * be cut -- and the closing bracket says the number survived the cut. */
+    snprintf(why, sizeof why,
+        "expected the title cut with '#2]' still on the end, and the body to "
+        "carry the whole marker: full title=%d body=%d",
+        screen_has(LONG_MARK " | #2]"), screen_count(LONG_MARK));
+    check(name,
+        !screen_has(LONG_MARK " | #2]") && screen_has("#2]") &&
+            screen_count(LONG_MARK) == 1,
+        why);
+    reap();
+}
+
 /* Focus has no text of its own on screen, so each case reads it back by killing
  * the focused window and naming which marker went. */
 static void t_focus(void) {
@@ -2046,6 +2077,7 @@ int main(int argc, char *argv[]) {
     t_kill_removes_window();
     t_exit_removes_window();
     t_window_ids();
+    t_title_truncated();
     t_focus();
     t_focus_moves();
     t_layouts();

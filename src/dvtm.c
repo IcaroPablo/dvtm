@@ -207,7 +207,6 @@ static int show_border(void) {
 }
 
 static void draw_border(Client *c) {
-    char t = '\0';
     int x, y, maxlen, attrs = NORMAL_ATTR;
 
     if (!show_border())
@@ -220,18 +219,16 @@ static void draw_border(Client *c) {
     wattrset(c->window, attrs);
     getyx(c->window, y, x);
     mvwhline(c->window, 0, 0, ACS_HLINE, c->w);
+    /* Ten columns for the brackets, the separator and the number. */
     maxlen = c->w - 10;
     if (maxlen < 0)
         maxlen = 0;
-    if ((size_t)maxlen < sizeof(c->title)) {
-        t = c->title[maxlen];
-        c->title[maxlen] = '\0';
-    }
 
-    mvwprintw(c->window, 0, 2, "[%s%s#%d]", *c->title ? c->title : "",
-        *c->title ? " | " : "", c->order);
-    if (t)
-        c->title[maxlen] = t;
+    /* `%.*s` cuts the title. Writing a '\0' into c->title and putting the byte
+     * back afterwards did the same thing, and made drawing a window a thing
+     * that edits it. */
+    mvwprintw(c->window, 0, 2, "[%.*s%s#%d]", maxlen, c->title,
+        maxlen && *c->title ? " | " : "", c->order);
     wmove(c->window, y, x);
 }
 
