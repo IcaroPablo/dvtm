@@ -1,11 +1,8 @@
 #!/bin/sh
-
-if [ ! -z "$DVTM_PAGER" ]; then
-    PAGER="$DVTM_PAGER"
-elif [ ! -z "$PAGER" ]; then
-    PAGER="$PAGER"
-else
-    PAGER="less -R"
-fi
-
-exec $PAGER "$@"
+#
+# dvtm-pager - show a window's scrollback in a pager.
+#
+# Unquoted, so DVTM_PAGER and PAGER can carry flags, and `less -R` is the
+# fallback rather than plain less: dvtm sends the scrollback with its colours
+# spelled out as escape sequences, and without -R less prints them as text.
+exec ${DVTM_PAGER:-${PAGER:-less -R}} "$@"
