@@ -973,13 +973,12 @@ static void copymode(const char *args[]) {
     }
 
     sel->term = sel->editor;
-    /* The window's own answer buffer starts empty; the paste register does not
-     * get touched. An editor that hands nothing back -- or that is still
+    /* The window's own answer buffer starts empty and the paste register is
+     * not touched. An editor that hands nothing back -- including one still
      * sitting there with the text saved but not yet let go of, which is what
      * `:w` without `:q` looks like from here -- must leave the last copy
      * pastable rather than replace it with silence. */
-    if (sel->editor_fds[1] != -1)
-        sel->editreg.len = 0;
+    sel->editreg.len = 0;
 
     if (sel->editor_fds[0] != -1) {
         char *buf = NULL;
@@ -1129,7 +1128,7 @@ static void killclient(const char *args[]) {
 }
 
 static void paste(const char *args[]) {
-    if (sel && copyreg.data)
+    if (sel && copyreg.len)
         term_paste(sel->term, copyreg.data, copyreg.len);
 }
 
@@ -1514,9 +1513,10 @@ static void read_editor(Client *c) {
             c->editreg.size ? c->editreg.size * 2 : (size_t)screen.history;
         char *p = realloc(c->editreg.data, want);
         if (!p) {
-            /* Nothing can be added and nothing can be read: leave the pipe
-             * alone rather than spin on it. What is already there is still
-             * handed over when the editor exits. */
+            /* No room for more, so this is the end of the answer: close, and
+             * what did arrive is still handed over. Returning without reading
+             * would be the polite thing and cannot be done -- handle_editor
+             * drains in a loop and would never leave it. */
             close(c->editor_fds[1]);
             c->editor_fds[1] = -1;
             return;
