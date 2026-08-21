@@ -74,8 +74,12 @@ is used.
 .
 .Sh FILES
 .
-The temporary files are created according to the template:
-.Pa /tmp/dvtm-editor.XXXXXX .
+The temporary files are created in
+.Ev TMPDIR ,
+or in
+.Pa /tmp
+if it is not set, named after the template
+.Pa dvtm-editor.XXXXXX .
 .Pp
 .Pa /dev/tty
 is opened to obtain a controlling tty which is used for the standard input/output

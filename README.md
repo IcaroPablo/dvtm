@@ -159,7 +159,7 @@ A single line looked fine, which made it read as a limit on length.
 `MOD+/` opens the pager already searching forward.
 
 The editor is `$DVTM_EDITOR`, then `$VISUAL`, then `$EDITOR`, then `vi`. The
-pager is `$DVTM_PAGER`, then `$PAGER`, then `less`. Any full-screen editor
+pager is `$DVTM_PAGER`, then `$PAGER`, then `less -R`. Any full-screen editor
 works: the text is handed over in a temporary file and the editor gets the
 terminal to itself.
 
