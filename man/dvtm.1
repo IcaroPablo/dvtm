@@ -58,7 +58,8 @@ and don't change it to the one of the currently focused window.
 .It Fl s Ar status-fifo
 Open or create the named pipe
 .Pa status-fifo
-read its content and display it in the statusbar. See the
+read its content and display it in the statusbar.
+See the
 .Xr dvtm-status 1
 script for an usage example.
 .
@@ -295,13 +296,14 @@ Each process also has access to its constant and unique window id.
 .
 .It Ev DVTM_CMD_FIFO
 If the -c command line argument was specified upon dvtm startup, this variable
-will be set to the file name of the named pipe. Thus allowing the process
-to send commands back to dvtm.
+will be set to the file name of the named pipe.
+Thus allowing the process to send commands back to dvtm.
 .
 .It Ev DVTM_TERM
 By default dvtm uses its own terminfo file and therefore sets
 .Ev TERM=dvtm
-within the client windows. This can be overridden by setting the
+within the client windows.
+This can be overridden by setting the
 .Ev DVTM_TERM
 environment variable to a valid terminal name before launching dvtm.
 .

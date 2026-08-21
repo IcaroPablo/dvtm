@@ -41,10 +41,14 @@ format:
 	@echo "formatting with $$(${CLANG_FORMAT} --version)"
 	@${CLANG_FORMAT} -i ${SRC} ${HDR} config.def.h tests/run.c tests/probe.c
 
+# `-T html`: mandoc dropped xhtml in 2017, and only the last -T counts, so
+# `-T utf8 -T xhtml` asked every current mandoc for a format it does not have.
+# No `|| true` either: it turned that refusal into three empty files and an
+# exit status of zero.
 man:
 	@for m in ${MANUALS}; do \
-		echo "Generating $$m"; \
-		sed -e "s/VERSION/${VERSION}/" "$$m" | mandoc -W warning -T utf8 -T xhtml -O man=%N.%S.html -O style=mandoc.css 1> "$$m.html" || true; \
+		echo "Generating $$m.html"; \
+		sed -e "s/VERSION/${VERSION}/" "$$m" | mandoc -W warning -T html -O man=%N.%S.html -O style=mandoc.css 1> "$$m.html"; \
 	done
 
 debug: clean
@@ -111,4 +115,6 @@ uninstall:
 	@echo removing manual page from ${DESTDIR}${MANPREFIX}/man1
 	@rm -f ${DESTDIR}${MANPREFIX}/man1/dvtm.1
 
-.PHONY: all clean dist install uninstall debug test format
+# `man` above all: there is a directory of that name, so without this make
+# finds it, decides the target is up to date and does nothing.
+.PHONY: all clean dist install uninstall debug test format man

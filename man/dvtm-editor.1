@@ -18,15 +18,16 @@ The
 .Nm
 is a file buffering utility used by the
 .Xr dvtm 1
-terminal multiplexer to implement its copy mode. It reads the standard input and saves it to a temporary
-file, then opens an editor according to the
+terminal multiplexer to implement its copy mode.
+It reads the standard input and saves it to a temporary file, then opens an
+editor according to the
 .Sx "ENVIRONMENT VARIABLES" .
 .Pp
 If the invoked editor terminates with a non-zero exit status, or never saved the
 file,
 .Nm
-does not output anything.  Otherwise, it outputs the content of the temporary
-file to stdout.
+does not output anything.
+Otherwise, it outputs the content of the temporary file to stdout.
 .Pp
 Saving is the question asked, and not whether the text differs: saving the
 buffer exactly as it arrived is an ordinary thing to want, and a content
@@ -90,9 +91,9 @@ in visual mode will reduce the file to the currently active selection(s).
 .
 .Sh SEE ALSO
 .
-.Xr vi 1 ,
 .Xr dvtm 1 ,
-.Xr dvtm-pager 1
+.Xr dvtm-pager 1 ,
+.Xr vi 1
 .
 .
 .Sh AUTHOR
