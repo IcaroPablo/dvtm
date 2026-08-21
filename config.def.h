@@ -64,6 +64,13 @@ static Color colors[] = {
 #define TAG_OCCUPIED (COLOR(BLUE) | A_NORMAL)
 /* curses attributes for not selected tags which with urgent windows */
 #define TAG_URGENT (COLOR(BLUE) | A_NORMAL | A_BLINK)
+/* whether the bar shows tags with nothing on them. false leaves out every tag
+ * that has no window and is not selected, so the tag list is as long as the
+ * work in front of you rather than as long as tags[] -- which is what nine
+ * tags in TAG_SYMBOL's brackets would otherwise cost: 27 columns of an
+ * 80-column bar, most of it empty. The selected tag is always shown, empty or
+ * not; hiding it would leave a view with no tag at all in the bar. */
+#define TAG_SHOW_EMPTY true
 
 const char tags[][8] = { "1", "2", "3", "4", "5", "6", "7", "8", "9" };
 

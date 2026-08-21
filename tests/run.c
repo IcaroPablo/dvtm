@@ -1127,6 +1127,43 @@ static void t_tags(void) {
     reap();
 }
 
+/* Which tags reach the bar is config.h's business: TAG_SHOW_EMPTY says whether
+ * a tag with nothing on it is drawn at all. Two things hold whichever way it is
+ * set, and they are the two edges of that filter -- a tag with a window on it
+ * is in the bar, and so is the selected tag while it is empty. Hiding the
+ * second would leave a view with no tag in the bar at all.
+ *
+ * With the tags all shown both hold for free; with the empty ones hidden each
+ * one is the filter's doing. So this measures the setting in the build it is
+ * compiled into, and asserts nothing about which build that is.
+ *
+ * Two windows, because BAR_AUTOHIDE takes the bar away while only one client
+ * exists and this reads the bar. */
+static void t_tag_bar(void) {
+    char why[220];
+
+    start("tests/probe mark " W1, "tests/probe mark " W2, NULL);
+    if (!wait_ids(2, 6000)) {
+        fail("a tag with a window on it is in the bar",
+            "the two windows never appeared");
+        reap();
+        return;
+    }
+    settle(700);
+
+    /* the focused window moves to tag 2; the view stays on tag 1 */
+    send_chord("t2");
+    settle(900);
+    snprintf(why, sizeof why, "tag 2 holds %s, and the bar shows no [2]", W2);
+    check("a tag with a window on it is in the bar", bar_has("[2]"), why);
+
+    send_chord("v3"); /* view tag 3, which has nothing on it */
+    settle(900);
+    check("the selected tag is in the bar even when empty", bar_has("[3]"),
+        "tag 3 is selected and empty, and the bar shows no [3]");
+    reap();
+}
+
 /* Counted with screen_occurrences and not screen_count: two windows side by
  * side report on the same screen row. */
 static void t_runinall(void) {
@@ -2806,6 +2843,7 @@ int main(int argc, char *argv[]) {
     t_scrollback_no_history();
     t_tiny_screen();
     t_tags();
+    t_tag_bar();
     t_runinall();
     t_no_dropped_keys();
     t_typing_during_output();

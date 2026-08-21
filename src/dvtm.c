@@ -148,11 +148,16 @@ static void drawbar(void) {
     move(bar.y, 0);
 
     for (unsigned int i = 0; i < LENGTH(tags); i++) {
-        if (tagset[seltags] & (1 << i))
+        unsigned int bit = 1 << i;
+        /* An urgent tag holds the window that raised the flag, so it is an
+         * occupied tag too and needs no case of its own here. */
+        if (!TAG_SHOW_EMPTY && !((tagset[seltags] | occupied) & bit))
+            continue;
+        if (tagset[seltags] & bit)
             attrset(TAG_SEL);
-        else if (urgent & (1 << i))
+        else if (urgent & bit)
             attrset(TAG_URGENT);
-        else if (occupied & (1 << i))
+        else if (occupied & bit)
             attrset(TAG_OCCUPIED);
         else
             attrset(TAG_NORMAL);

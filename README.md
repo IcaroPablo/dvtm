@@ -125,6 +125,12 @@ tags: the current view shows every window carrying one of the active tags.
 - `MOD+t [1..n]` apply the nth tag to the focused window
 - `MOD+T [1..n]` add/remove the nth tag to/from the focused window
 
+There are nine tags, and the bar shows all of them. `TAG_SHOW_EMPTY false` in
+`config.h` leaves out the ones with no windows on them, so the tag list is as
+long as the work in front of you rather than as long as `tags[]` — nine tags in
+brackets is 27 columns of an 80-column bar. The tag being viewed stays in the
+bar either way, empty or not.
+
 ### Status bar
 
 Started with `dvtm -s fifo`, dvtm reads status messages from a named pipe and
@@ -171,7 +177,7 @@ copied to `config.h` on the first build, and is the example to work from. It
 defines the layouts, the key bindings and the colour rules, with macros for the
 common cases.
 
-A `config.h` brought over from upstream dvtm needs three small edits; they are
+A `config.h` brought over from upstream dvtm needs five small edits; they are
 listed in [docs/changes.md](docs/changes.md).
 
 ## Development

@@ -96,10 +96,15 @@ uses.
   * ncursesw 6.1+ is simply required, so the conditionals that used to stand in
     for other curses libraries are gone. Mouse support is always compiled in
     and switched at runtime.
+  * Nine tags rather than five, and the bar no longer has to show all of them.
+    `TAG_SHOW_EMPTY false` in `config.h` draws a tag only while it has a window
+    on it or is the one being viewed, which is what makes nine usable: nine
+    tags in `TAG_SYMBOL`'s brackets is 27 columns of an 80-column bar, mostly
+    empty. Showing them all is still the default.
 
 ## Bringing a `config.h` over from upstream dvtm
 
-Four things changed:
+Five things changed:
 
   * Add `#include "dvtm.h"` at the top, and change layout includes from
     `#include "tile.c"` to `#include "tile.h"`. The layouts were renamed to
@@ -112,6 +117,11 @@ Four things changed:
     switch no longer exists; mouse support is always built in, and is turned
     off at runtime with `ENABLE_MOUSE` in `config.h`, the `-M` flag, or
     `MOD+M`.
+  * Add `#define TAG_SHOW_EMPTY true`, which is missing from any upstream
+    `config.h` and is what upstream does — show every tag, empty or not. The
+    build stops in `drawbar` without it. Five tags in `tags[]` still work as
+    they are: the tag list, `TAGMASK` and the bindings all read that table, so
+    an upstream config simply has four fewer tags and no bindings for them.
   * Change the two `dvtm-pager` bindings from `copymode` to `pagemode`.
     `copymode` used to look for "pager" or "editor" in the program's name to
     decide whether to send colour and whether to read an answer back, so
