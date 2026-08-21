@@ -60,6 +60,12 @@ Checks it deliberately does not make are printed as `SKIP` with the reason,
 rather than hidden in a comment: a silently deleted assertion is
 indistinguishable from one nobody thought of.
 
+**Not against a debug build.** `make debug` writes the same `dvtm`, and `make
+test` will not rebuild it, so `make debug && make test` measures the wrong
+binary. A debug build traces the event loop on stderr, which lands on the very
+screen the suite reads, and checks fail for reasons that have nothing to do
+with the code. Run `make clean && make` first.
+
 A green run is not proof the program works. Three real drawing bugs — the
 colour pair passed as a `short` where ncurses wants an `int`, `TERM` never set
 for children, the cursor never repositioned — all survived a fully green suite
