@@ -96,6 +96,7 @@ int main(int argc, char *argv[]) {
         printf("\033[38;2;10;200;30mSEMI\033[0m\n");    /* rgb(10,200,30)  */
         printf("\033[38:2::20:100:250mCOLON\033[0m\n"); /* rgb(20,100,250) */
         printf("\033[38;5;196mPAL256\033[0m\n");        /* palette 196     */
+        printf("\033[91mBRIGHT\033[0m\n");              /* ansi entry 9    */
         fflush(stdout);
     } else if (!strcmp(what, "manycolors")) {
         /* More than 255 distinct foreground colours at once, to exercise the

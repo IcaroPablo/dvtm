@@ -21,6 +21,13 @@ bool has_default_colors;
  * packed rgb value is far past the end of it. */
 static bool direct_color;
 
+/* The highest palette entry this description still names: 8 or 16. No
+ * capability states it, so it is measured in ui_init_colors rather than
+ * assumed, and guessing is wrong on half the terminals -- xterm-direct as
+ * shipped names only 0-7, and handing it entry 9 paints rgb(0,0,9), a black
+ * cell where bright red was meant. */
+static int direct_ansi_max = 8;
+
 /* ── colour ───────────────────────────────────────────────────────────────── */
 
 static const int cube[6] = { 0, 95, 135, 175, 215, 255 };
@@ -124,12 +131,16 @@ static int32_t index_rgb(int i) {
 
 /* A palette entry as a colour number for this terminal. A direct-colour
  * terminal wants the rgb; anything else wants an index, and one it actually
- * has -- asking a 16-colour terminal for entry 196 gets the default colour. */
+ * has -- asking a 16-colour terminal for entry 196 gets the default colour.
+ *
+ * Entries the description still names go out as indices even here, so the
+ * terminal's own theme decides them; see direct_ansi_max. The rest are
+ * painted from ansi[], and a themed terminal's version of them is lost. */
 static int32_t color_index(int i) {
     int32_t c;
 
     if (direct_color)
-        return i < 8 ? i : index_rgb(i);
+        return i < direct_ansi_max ? i : index_rgb(i);
     if (i < COLORS)
         return i;
     if ((c = index_rgb(i)) < 0)
@@ -190,6 +201,23 @@ void ui_init_colors(void) {
     short fg = -1, bg = -1;
 
     direct_color = COLORS >= (1 << 24);
+
+    /* ";2;" and ":2:" are the two spellings of the rgb introducer -- SGR 38
+     * with a semicolon, and the ITU form with colons. Neither can appear in a
+     * plain ANSI code, so finding one means setaf folded the entry.
+     *
+     * tparm and not tiparm: tiparm is an ncurses extension from 6.0, and
+     * OpenBSD's base curses is older. tparm is X/Open, and nine longs suit
+     * both the fixed-arity and variadic declarations of it. */
+    direct_ansi_max = 8;
+    if (direct_color) {
+        char *setaf = tigetstr("setaf"), *out;
+
+        if (setaf && setaf != (char *)-1 &&
+            (out = tparm(setaf, 9L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L)) != NULL &&
+            !strstr(out, ";2;") && !strstr(out, ":2:"))
+            direct_ansi_max = 16;
+    }
 
     /* use_default_colors() first: it is what decides whether -1 can be handed
      * to ncurses at all, and pair 0 only answers usefully afterwards. */

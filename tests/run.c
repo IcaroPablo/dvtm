@@ -738,6 +738,39 @@ static void t_palette_terminal(void) {
         "reachable if this fails");
     reap();
 
+    /* The two direct-colour answers, asserted apart. Both descriptions are
+     * ncurses' own: xterm-direct names entries 0-7, xterm-direct16 names 0-15,
+     * and dvtm has to be right on either.
+     *
+     * A suite that only checked colour had arrived stayed green through a dvtm
+     * hardcoded to one of them, because the wrong answer is silent: entry 9
+     * given to a description that stops at 8 paints rgb(0,0,9), a black cell,
+     * and nothing errors. */
+    outer_term = "xterm-direct16";
+    start("tests/probe truecolor", NULL, NULL);
+    wait_screen("BRIGHT", 5000);
+    settle(600);
+    check("a description that names entry 9 is given the index",
+        wait_bytes("\033[91m", 10),
+        "ansi entry 9 did not come out as ESC[91m: dvtm folded it into "
+        "rgb, and the terminal's own theme never got to decide what "
+        "bright red looks like");
+    reap();
+
+    outer_term = "xterm-direct";
+    start("tests/probe truecolor", NULL, NULL);
+    wait_screen("BRIGHT", 5000);
+    settle(600);
+    /* ansi[9] is rgb(255,0,0). The failure this guards is rgb(0,0,9) --
+     * the index handed over untouched to a description that reads it as
+     * packed rgb. */
+    check("a description that stops at 8 is given rgb, not the index",
+        wait_bytes("38:2::255:0:0", 10) && !wait_bytes("38:2::0:0:9", 10),
+        "ansi entry 9 did not come out as rgb(255,0,0): if the bytes "
+        "read 0:0:9 then the raw index was passed to a description "
+        "that cannot name it, and the cell paints black");
+    reap();
+
     outer_term = "xterm-direct";
 }
 
