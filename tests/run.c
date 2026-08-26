@@ -1253,6 +1253,43 @@ static void t_child_env(void) {
     reap();
 }
 
+/* The other half of t_child_env, on a terminal that has eight colours.
+ *
+ * COLORTERM used to be set unconditionally, so a child in a linux console was
+ * told it could send 24-bit colour into eight. A program that reads COLORTERM
+ * believes it over terminfo, which is how the same colour scheme came out
+ * looking different inside dvtm in a tty than it did in a real terminal.
+ *
+ * COLORTERM is deliberately set for dvtm itself here. Without that the check
+ * would pass on a machine where nothing set it, measuring nothing: the point
+ * is that dvtm takes it away, not merely that it fails to add it. */
+static void t_child_env_8color(void) {
+    const char *saved_term = outer_term;
+    const char *saved_ct = getenv("COLORTERM");
+    char keep[64];
+
+    keep[0] = '\0';
+    if (saved_ct)
+        snprintf(keep, sizeof keep, "%s", saved_ct);
+    setenv("COLORTERM", "truecolor", 1);
+    outer_term = "ansi"; /* colors#8, and no Tc */
+
+    start("tests/probe env", NULL, NULL);
+    check("eight colours outside means the plain dvtm entry inside",
+        wait_screen("TERM=[dvtm]", 6000),
+        "the child was handed dvtm-256color on a terminal with eight colours");
+    check("and the child is not told the terminal does truecolor",
+        screen_has("COLORTERM=[]"),
+        "COLORTERM still claimed truecolor where terminfo says colors#8");
+    reap();
+
+    outer_term = saved_term;
+    if (keep[0])
+        setenv("COLORTERM", keep, 1);
+    else
+        unsetenv("COLORTERM");
+}
+
 /* Text a program never coloured must stay in the terminal's default colours.
  *
  * Honest note on what this does and does not cover: it was written after a bug
@@ -2841,6 +2878,7 @@ int main(int argc, char *argv[]) {
     t_backspace();
     t_utf8_input();
     t_child_env();
+    t_child_env_8color();
     t_plain_text_default_color();
     t_cursor_follows_child();
     t_copymode();

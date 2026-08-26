@@ -31,6 +31,7 @@ static const char *const *keytable_overlay;
 static int keytable_overlay_len;
 static bool is_utf8;
 static char child_term[32]; /* the TERM handed to children */
+static bool child_truecolor; /* whether that TERM claims 24-bit colour */
 
 /* ── scrollback ───────────────────────────────────────────────────────────── */
 
@@ -186,8 +187,9 @@ void term_init(char const *const keytable[], int count) {
      * cursor redraws what you typed instead of moving over it. */
     if (!(term = getenv("DVTM_TERM")))
         term = "dvtm";
+    child_truecolor = COLORS >= 256;
     snprintf(child_term, sizeof child_term, "%s%s", term,
-        COLORS >= 256 ? "-256color" : "");
+        child_truecolor ? "-256color" : "");
 }
 
 Term *term_create(int rows, int cols, int scroll_buf_sz) {
@@ -364,7 +366,21 @@ pid_t term_forkpty(Term *t, const char *p, const char *argv[], const char *cwd,
         for (const char **envp = env; envp && envp[0]; envp += 2)
             setenv(envp[0], envp[1], 1);
         setenv("TERM", child_term, 1);
-        setenv("COLORTERM", "truecolor", 1);
+        /* COLORTERM has to agree with the description on the line above it:
+         * dvtm-256color states Tc and setrgbf, plain dvtm is colors#8 and
+         * states neither. Setting it unconditionally told every child in a
+         * linux console that it could send 24-bit colour into eight, and a
+         * program that reads COLORTERM believes it over terminfo -- which is
+         * how the same colour scheme comes out different in a tty.
+         *
+         * The 256-colour case still claims truecolor, and should: dvtm accepts
+         * the RGB and folds it to the nearest index itself. Only the eight
+         * colour case has no honest answer. Unset rather than left alone,
+         * because otherwise the child inherits the outer terminal's. */
+        if (child_truecolor)
+            setenv("COLORTERM", "truecolor", 1);
+        else
+            unsetenv("COLORTERM");
 
         if (cwd && chdir(cwd) != 0) {
             fprintf(stderr, "\nchdir() failed. ");
