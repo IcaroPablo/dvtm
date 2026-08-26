@@ -157,7 +157,11 @@ static void drawbar(void) {
             attrset(TAG_SEL);
         else if (urgent & bit)
             attrset(TAG_URGENT);
-        else if (occupied & bit)
+        /* Only while empty tags are drawn: with TAG_SHOW_EMPTY false the loop
+         * above has already skipped everything that is neither selected nor
+         * occupied, so every tag left is one or the other and a colour for
+         * "occupied" separates it from nothing. */
+        else if (TAG_SHOW_EMPTY && (occupied & bit))
             attrset(TAG_OCCUPIED);
         else
             attrset(TAG_NORMAL);
