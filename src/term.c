@@ -208,6 +208,9 @@ Term *term_create(int rows, int cols, int scroll_buf_sz) {
     t->screen = vterm_obtain_screen(t->vt);
     vterm_screen_set_callbacks(t->screen, &screen_callbacks, t);
     vterm_screen_enable_altscreen(t->screen, 1);
+    /* Without reflow a pane that narrows cuts every line on screen to the new
+     * width, and what is cut is gone from the buffer, not just from view. */
+    vterm_screen_enable_reflow(t->screen, 1);
     vterm_screen_reset(t->screen, 1);
     return t;
 }
@@ -653,17 +656,29 @@ static size_t put_cell(char *s, const VTermScreenCell *cell) {
 
 size_t term_content_get(Term *t, char **buf, bool colored) {
     int lines = t->sb_count + t->rows;
+    /* A scrollback line keeps the width it was pushed at, which is wider than
+     * the pane whenever one has since been narrowed. Reading it back at the
+     * pane's current width would cut every line short of what was actually
+     * there, so the widest line decides the buffer. */
+    int width = t->cols;
     /* Per cell: two SGRs at worst, and every character the cell can hold. The
      * spare column per line carries the reset and the newline. */
     size_t per_cell =
         (colored ? 64 : 0) + MB_CUR_MAX * VTERM_MAX_CHARS_PER_CELL;
-    size_t size = (size_t)lines * (size_t)(t->cols + 1) * per_cell;
+    size_t size;
     VTermScreenCell *cells;
     char *s;
 
+    for (int i = 0; i < t->sb_count; i++) {
+        Line *l = term_sb_at(t, i);
+        if (l && l->cols > width)
+            width = l->cols;
+    }
+    size = (size_t)lines * (size_t)(width + 1) * per_cell;
+
     if (!(*buf = malloc(size)))
         return 0;
-    if (!(cells = calloc((size_t)t->cols, sizeof *cells))) {
+    if (!(cells = calloc((size_t)width, sizeof *cells))) {
         free(*buf);
         *buf = NULL;
         return 0;
@@ -673,24 +688,22 @@ size_t term_content_get(Term *t, char **buf, bool colored) {
     for (int i = 0; i < lines; i++) {
         char *last_non_space = s;
         int32_t prev_fg = -2, prev_bg = -2;
+        int cols = t->cols;
 
         if (i < t->sb_count) {
             Line *l = term_sb_at(t, i);
-            for (int c = 0; c < t->cols; c++) {
-                if (l && c < l->cols)
-                    cells[c] = l->cells[c];
-                else
-                    memset(&cells[c], 0, sizeof *cells);
-            }
+            cols = l ? l->cols : 0;
+            for (int c = 0; c < cols; c++)
+                cells[c] = l->cells[c];
         } else {
-            for (int c = 0; c < t->cols; c++) {
+            for (int c = 0; c < cols; c++) {
                 VTermPos pos = { .row = i - t->sb_count, .col = c };
                 if (!vterm_screen_get_cell(t->screen, pos, &cells[c]))
                     memset(&cells[c], 0, sizeof *cells);
             }
         }
 
-        for (int c = 0; c < t->cols; c++) {
+        for (int c = 0; c < cols; c++) {
             VTermScreenCell *cell = &cells[c];
 
             if (colored) {
