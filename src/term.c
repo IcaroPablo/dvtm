@@ -48,6 +48,12 @@ Line *term_sb_at(Term *t, int n) {
     return &t->sb[(t->sb_first + n) % t->sb_size];
 }
 
+/* Only pushline, and no popline to match it: libvterm would ask for a line back
+ * when a resize makes the screen taller, which here means a pane growing because
+ * the layout changed -- a window closed, a minimised one restored. Answering
+ * that with history puts back the line `clear` just took away, and after a clear
+ * it is the only thing on screen. Unanswered, libvterm blanks the new row at the
+ * bottom instead, and the history stays where it belongs, in scrollback. */
 static int sb_pushline(int cols, const VTermScreenCell *cells, void *user) {
     Term *t = user;
     Line *l;
@@ -69,25 +75,6 @@ static int sb_pushline(int cols, const VTermScreenCell *cells, void *user) {
     memcpy(l->cells, cells, (size_t)cols * sizeof(VTermScreenCell));
     l->cols = cols;
     t->sb_count++;
-    return 1;
-}
-
-/* libvterm asks for a line back when the screen scrolls down past the top. */
-static int sb_popline(int cols, VTermScreenCell *cells, void *user) {
-    Term *t = user;
-    Line *l;
-
-    if (t->sb_count == 0)
-        return 0;
-    l = &t->sb[(t->sb_first + t->sb_count - 1) % t->sb_size];
-    for (int c = 0; c < cols; c++) {
-        if (c < l->cols)
-            cells[c] = l->cells[c];
-        else
-            memset(&cells[c], 0, sizeof(VTermScreenCell));
-    }
-    line_free(l);
-    t->sb_count--;
     return 1;
 }
 
@@ -164,7 +151,6 @@ static const VTermScreenCallbacks screen_callbacks = {
     .bell = cb_bell,
     .resize = cb_resize,
     .sb_pushline = sb_pushline,
-    .sb_popline = sb_popline,
     .sb_clear = sb_clear,
 };
 
