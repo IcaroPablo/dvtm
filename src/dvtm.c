@@ -104,6 +104,17 @@ static Client *nextvisible(Client *c) {
     return c;
 }
 
+static Client *clientbyid(const char *id) {
+    if (!id)
+        return NULL;
+
+    const int win_id = atoi(id);
+    for (Client *c = clients; c; c = c->next)
+        if (c->id == win_id)
+            return c;
+    return NULL;
+}
+
 static void updatebarpos(void) {
     bar.y = 0;
     wax = 0;
@@ -621,28 +632,25 @@ static void tag(const char *args[]) {
 }
 
 static void tagid(const char *args[]) {
-    if (!args[0] || !args[1])
+    Client *c = clientbyid(args[0]);
+    unsigned int ntags;
+
+    if (!c || !args[1])
         return;
 
-    const int win_id = atoi(args[0]);
-    for (Client *c = clients; c; c = c->next) {
-        if (c->id == win_id) {
-            unsigned int ntags = c->tags;
-            for (unsigned int i = 1; i < MAX_ARGS && args[i]; i++) {
-                if (args[i][0] == '+')
-                    ntags |= bitoftag(args[i] + 1);
-                else if (args[i][0] == '-')
-                    ntags &= ~bitoftag(args[i] + 1);
-                else
-                    ntags = bitoftag(args[i]);
-            }
-            ntags &= TAGMASK;
-            if (ntags) {
-                c->tags = ntags;
-                tagschanged();
-            }
-            return;
-        }
+    ntags = c->tags;
+    for (unsigned int i = 1; i < MAX_ARGS && args[i]; i++) {
+        if (args[i][0] == '+')
+            ntags |= bitoftag(args[i] + 1);
+        else if (args[i][0] == '-')
+            ntags &= ~bitoftag(args[i] + 1);
+        else
+            ntags = bitoftag(args[i]);
+    }
+    ntags &= TAGMASK;
+    if (ntags) {
+        c->tags = ntags;
+        tagschanged();
     }
 }
 
@@ -1054,21 +1062,16 @@ static void focusn(const char *args[]) {
 }
 
 static void focusid(const char *args[]) {
-    if (!args[0])
-        return;
+    Client *c = clientbyid(args[0]);
 
-    const int win_id = atoi(args[0]);
-    for (Client *c = clients; c; c = c->next) {
-        if (c->id == win_id) {
-            focus(c);
-            if (c->minimized)
-                toggleminimize(NULL);
-            if (!isvisible(c)) {
-                c->tags |= tagset[seltags];
-                tagschanged();
-            }
-            return;
-        }
+    if (!c)
+        return;
+    focus(c);
+    if (c->minimized)
+        toggleminimize(NULL);
+    if (!isvisible(c)) {
+        c->tags |= tagset[seltags];
+        tagschanged();
     }
 }
 
@@ -1198,6 +1201,69 @@ static void scrollback(const char *args[]) {
 
     draw(sel);
     curs_set(term_cursor_visible(sel->term));
+}
+
+/* minimize <win_id>: put that window out of the way, leaving the one row of
+ * title stub that a minimised window keeps. Through toggleminimize(), which
+ * works on the selected window, rather than repeating its list surgery. */
+static void minimizeid(const char *args[]) {
+    Client *c = clientbyid(args[0]);
+
+    if (!c || c->minimized)
+        return;
+    focus(c);
+    toggleminimize(NULL);
+}
+
+/* onidle <win_id> <command...>: run those dvtm commands once that window's own
+ * program is back in the foreground of its terminal and stays there.
+ *
+ * "Stays there" is the whole rule. A builtin like `cd` runs in the shell itself
+ * and never changes the foreground process group, and the echo of freshly typed
+ * bytes wakes the loop while the shell has not forked yet -- so a single look
+ * would fire before the command started. One pending line per window, consumed
+ * when it fires. */
+static void onidleid(const char *args[]) {
+    Client *c = clientbyid(args[0]);
+    char *p, *end;
+
+    if (!c || !args[1])
+        return;
+
+    p = c->onidle;
+    end = c->onidle + sizeof c->onidle - 2;
+    for (int i = 1; i < MAX_ARGS && args[i] && p < end; i++) {
+        if (p > c->onidle)
+            *p++ = ' ';
+        for (const char *s = args[i]; *s && p < end; s++)
+            *p++ = *s;
+    }
+    /* The newline is not decoration: the parser runs a command when it reaches
+     * one, and a line without it is parsed and then dropped. */
+    *p++ = '\n';
+    *p = '\0';
+    c->idle = 0;
+}
+
+/* send <win_id> <path>: type the contents of `path` into that window, as if the
+ * bytes had come from its keyboard. A path and not the text itself because the
+ * fifo is line-oriented, while a command line with its Enter included is two
+ * lines at least.
+ *
+ * All or nothing: half a command line is still a command line, so a file that
+ * may not have been read whole is refused rather than typed in part. */
+static void sendid(const char *args[]) {
+    Client *c = clientbyid(args[0]);
+    char buf[4096];
+    ssize_t len;
+    int fd;
+
+    if (!c || !args[1] || (fd = open(args[1], O_RDONLY)) == -1)
+        return;
+    len = read(fd, buf, sizeof buf);
+    close(fd);
+    if (len > 0 && (size_t)len < sizeof buf)
+        term_write(c->term, buf, (size_t)len);
 }
 
 static void sendkeys(const char *args[]) {
@@ -1391,18 +1457,13 @@ static Cmd *get_cmd_by_name(const char *name) {
     return NULL;
 }
 
-static void handle_cmdfifo(void) {
-    int r;
-    char *p, *s, cmdbuf[512], c;
+/* Run one or more commands from a buffer, which it chews up as it goes -- hand
+ * it a copy. Split out from handle_cmdfifo() so that a command scheduled for
+ * later goes through exactly the same parser as one arriving on the fifo. */
+static void run_cmdline(char *cmdbuf) {
+    char *p, *s, c;
     Cmd *cmd;
 
-    r = read(cmdfifo.fd, cmdbuf, sizeof cmdbuf - 1);
-    if (r <= 0) {
-        cmdfifo.fd = -1;
-        return;
-    }
-
-    cmdbuf[r] = '\0';
     p = cmdbuf;
     while (*p) {
         /* find the command name */
@@ -1485,6 +1546,55 @@ static void handle_cmdfifo(void) {
             }
         }
     }
+}
+
+static bool waiting(void) {
+    for (Client *c = clients; c; c = c->next)
+        if (c->onidle[0])
+            return true;
+    return false;
+}
+
+/* Fire what a window is waiting on, once it has gone quiet. Called only on the
+ * select() timeout, which is what makes "quiet" mean wall-clock silence.
+ *
+ * `app` and not `term`: the pid recorded for a window is the program dvtm
+ * started there, while in copy mode `term` points at the editor. One window per
+ * pass, and its line is taken before running, because a command may change the
+ * client list under us. */
+static void check_idle(void) {
+    for (Client *c = clients; c; c = c->next) {
+        char line[sizeof c->onidle];
+
+        if (!c->onidle[0] || !c->app)
+            continue;
+        if (tcgetpgrp(c->app->pty) != c->pid) {
+            c->idle = 0;
+            continue;
+        }
+        if (++c->idle < 2)
+            continue;
+
+        strcpy(line, c->onidle);
+        c->onidle[0] = '\0';
+        c->idle = 0;
+        run_cmdline(line);
+        return;
+    }
+}
+
+static void handle_cmdfifo(void) {
+    char cmdbuf[512];
+    int r;
+
+    r = read(cmdfifo.fd, cmdbuf, sizeof cmdbuf - 1);
+    if (r <= 0) {
+        cmdfifo.fd = -1;
+        return;
+    }
+
+    cmdbuf[r] = '\0';
+    run_cmdline(cmdbuf);
 }
 
 static void handle_mouse(void) {
@@ -1755,6 +1865,9 @@ int main(int argc, char *argv[]) {
     while (running) {
         int r, nfds = 0;
         fd_set rd, wr;
+        /* A timeout only while a window is waiting on something: with nothing
+         * pending the loop sleeps as it always has. */
+        struct timeval tv = { 0, 100000 };
 
         if (screen.need_resize) {
             resize_screen();
@@ -1791,7 +1904,9 @@ int main(int argc, char *argv[]) {
 
         doupdate();
         sigprocmask(SIG_UNBLOCK, &blockset, NULL);
-        r = select(nfds + 1, &rd, &wr, NULL, NULL);
+        r = select(nfds + 1, &rd, &wr, NULL, waiting() ? &tv : NULL);
+        if (r == 0)
+            check_idle();
         sigprocmask(SIG_BLOCK, &blockset, NULL);
 
         /* Before the EINTR check, not after: a signal arriving during select

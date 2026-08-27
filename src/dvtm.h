@@ -62,6 +62,10 @@ struct Client {
      * mode at once and their answers must not interleave. */
     Register editreg;
     const char *cmd;
+    /* What to run once this window's own program is back in the foreground and
+     * stays there, and how many consecutive quiet looks it has had. */
+    char onidle[256];
+    int idle;
     char title[255];
     int order;
     pid_t pid;
@@ -187,6 +191,9 @@ static void paste(const char *args[]);
 static void quit(const char *args[]);
 static void redraw(const char *args[]);
 static void scrollback(const char *args[]);
+static void minimizeid(const char *args[]);
+static void onidleid(const char *args[]);
+static void sendid(const char *args[]);
 static void sendkeys(const char *args[]);
 static void setlayout(const char *args[]);
 static void incnmaster(const char *args[]);

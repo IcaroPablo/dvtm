@@ -217,11 +217,18 @@ static Button buttons[] = {
 
 static Cmd commands[] = {
     /* create [cmd]: create a new window, run `cmd` in the shell if specified */
-    { "create", { create,   { NULL } } },
+    { "create",   { create,     { NULL } } },
     /* focus <win_id>: focus the window whose `DVTM_WINDOW_ID` is `win_id` */
-    { "focus",  { focusid,  { NULL } } },
+    { "focus",    { focusid,    { NULL } } },
+    /* minimize <win_id>: put that window out of the way */
+    { "minimize", { minimizeid, { NULL } } },
+    /* onidle <win_id> <command...>: run those commands once that window's own
+     * program is back in the foreground and stays there */
+    { "onidle",   { onidleid,   { NULL } } },
+    /* send <win_id> <path>: type the contents of `path` into that window */
+    { "send",     { sendid,     { NULL } } },
     /* tag <win_id> <tag> [tag ...]: add +tag, remove -tag or set tag of the window with the given identifier */
-    { "tag",    { tagid,    { NULL } } },
+    { "tag",      { tagid,      { NULL } } },
 };
 
 /* gets executed when dvtm is started */

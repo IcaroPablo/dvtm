@@ -20,6 +20,7 @@
  * suite and were found by running a real shell inside dvtm and reading the
  * bytes it emitted. After touching drawing code, do that too. */
 #include <errno.h>
+#include <locale.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -1275,8 +1276,11 @@ static void t_child_env_8color(void) {
     outer_term = "ansi"; /* colors#8, and no Tc */
 
     start("tests/probe env", NULL, NULL);
+    /* `[dvtm]` and not `TERM=[dvtm]`: the brackets are what makes the assertion
+     * tight, and dvtm can park the cursor at the right edge, which wraps the
+     * first line mid-string. */
     check("eight colours outside means the plain dvtm entry inside",
-        wait_screen("TERM=[dvtm]", 6000),
+        wait_screen("[dvtm]", 6000),
         "the child was handed dvtm-256color on a terminal with eight colours");
     check("and the child is not told the terminal does truecolor",
         screen_has("COLORTERM=[]"),
@@ -2175,6 +2179,200 @@ static void t_fifos(void) {
     unlink(statusfifo);
 }
 
+/* One line into a command fifo, opened per write the way anything driving dvtm
+ * from outside does. */
+static bool fifo_write(const char *fifo, const char *line) {
+    size_t len = strlen(line);
+    ssize_t n;
+    int fd;
+
+    if ((fd = open(fifo, O_WRONLY)) < 0)
+        return false;
+    n = write(fd, line, len);
+    close(fd);
+
+    return n == (ssize_t)len;
+}
+
+/* Start dvtm with a command fifo of its own, whose path comes back in `fifo`. */
+static void start_with_fifo(
+    char *fifo, size_t n, const char *tag, const char *cmd) {
+    char cwd[256];
+    const char *args[4];
+
+    if (!getcwd(cwd, sizeof cwd))
+        die("getcwd: %s", strerror(errno));
+    snprintf(fifo, n, "%s/tests/%s.%d", cwd, tag, (int)getpid());
+    unlink(fifo);
+
+    args[0] = "-c";
+    args[1] = fifo;
+    args[2] = cmd;
+    args[3] = NULL;
+    start_argv(args);
+}
+
+static void put_file(const char *path, const char *s, int times) {
+    FILE *f = fopen(path, "w");
+
+    if (!f)
+        die("fopen %s: %s", path, strerror(errno));
+    while (times-- > 0)
+        fputs(s, f);
+    fclose(f);
+}
+
+/* send <win_id> <path>: a file's bytes arrive at a window as keystrokes.
+ *
+ * The probe puts its own terminal in raw mode with echo off, so what reaches
+ * the screen is what the child actually read, not what a line discipline
+ * echoed back. Two lines, because carrying a newline is the whole reason this
+ * verb takes a path and not a string.
+ *
+ * The oversized file goes first and the two-line one after, so that a single
+ * assertion covers both: the probe answers once and then exits, and a file too
+ * big to hold, had it been typed in part, would leave its bytes in front of
+ * these four. */
+static void t_send(void) {
+    char fifo[512], file[512], line[620];
+    bool sent;
+
+    start_with_fifo(fifo, sizeof fifo, "send-cmd", "tests/probe echo");
+    snprintf(file, sizeof file, "%s.in", fifo);
+    snprintf(line, sizeof line, "send 1 %s\n", file);
+
+    if (!wait_screen("ECHOREADY", 5000)) {
+        fail("send: the window is listening",
+            "the probe never announced itself");
+    } else {
+        put_file(file, "x", 5000);
+        sent = fifo_write(fifo, line);
+        settle(1000);
+        put_file(file, "a\nb\n", 1);
+        sent = fifo_write(fifo, line) && sent;
+        settle(1000);
+
+        check("send: only the file that fits was typed",
+            sent && wait_screen("ECHO=610a620a", 5000),
+            "the window's one reply was not exactly the bytes a \\n b \\n -- "
+            "an "
+            "oversized file typed in part would show up in front of them");
+    }
+
+    reap();
+    unlink(file);
+    unlink(fifo);
+}
+
+/* minimize <win_id> and onidle <win_id> <command...>: a window is put out of
+ * the way and comes back when the other one is quiet. Between them these are
+ * the whole of what an editor needs to hand a command to a shell in another
+ * window and get its own pane back afterwards.
+ *
+ * The second window is made through the fifo so that its title and its body can
+ * differ: a minimised window keeps its title row, so a body marker is the only
+ * thing whose disappearance proves the body went away. */
+static void t_minimize_onidle(void) {
+    char fifo[512];
+
+    start_with_fifo(fifo, sizeof fifo, "mini-cmd", "tests/probe mark QUIETO");
+
+    if (!wait_screen("QUIETO", 6000) ||
+        !fifo_write(fifo, "create \"tests/probe mark CORPO\" segunda\n") ||
+        !wait_screen("CORPO", 6000)) {
+        fail(
+            "minimize: two windows are up", "the second window never appeared");
+    } else {
+        check("minimize: the body goes and the title row stays",
+            fifo_write(fifo, "minimize 2\n") &&
+                wait_screen_gone("CORPO", 4000) && wait_screen("segunda", 3000),
+            "after `minimize 2` the window body was still drawn, or its title "
+            "row went with it");
+
+        check("onidle: the window comes back once the other one is quiet",
+            fifo_write(fifo, "onidle 1 focus 2\n") &&
+                wait_screen("CORPO", 4000),
+            "`onidle 1 focus 2` never fired, or fired and did not restore the "
+            "minimised window");
+    }
+
+    reap();
+    unlink(fifo);
+}
+
+/* CPU time the process has used, in centiseconds. `ps -o time=` prints mm:ss.cc
+ * here and hh:mm:ss elsewhere, so fold the colon-separated fields into seconds
+ * and add the fraction if there is one. */
+static long cpu_centiseconds(pid_t pid) {
+    char cmd[80], out[80], *p;
+    long secs = 0;
+    FILE *f;
+
+    snprintf(cmd, sizeof cmd, "ps -o time= -p %d 2>/dev/null", (int)pid);
+    if (!(f = popen(cmd, "r")))
+        return -1;
+    p = fgets(out, sizeof out, f);
+    pclose(f);
+    if (!p)
+        return -1;
+
+    for (; *p == ' '; p++)
+        ;
+    if (*p < '0' || *p > '9')
+        return -1;
+    for (;;) {
+        char *end;
+
+        secs = secs * 60 + strtol(p, &end, 10);
+        if (*end != ':')
+            return secs * 100 + (*end == '.' ? strtol(end + 1, NULL, 10) : 0);
+        p = end + 1;
+    }
+}
+
+/* dvtm sleeps when nothing is happening, and has to keep sleeping: `onidle` is
+ * what gives the main loop a timeout, and a timeout is the kind of thing that
+ * gets left switched on.
+ *
+ * What this catches is a loop that stops sleeping at all -- a zero timeout, or
+ * a select() that returns at once. A 100 ms timeout left on costs too little
+ * CPU to show up here: measured, with the timeout made unconditional this check
+ * still passed. It runs after an onidle has fired, which is when the flag
+ * should have gone back off. */
+static void t_idle_costs_nothing(void) {
+    char fifo[512], why[200];
+    long before, after;
+
+    start_with_fifo(fifo, sizeof fifo, "idle-cmd", "tests/probe mark QUIETO");
+
+    if (!wait_screen("QUIETO", 6000)) {
+        fail("idle: the window is up", "no window appeared");
+    } else {
+        /* Fire one and let it go off, so what is measured is the state after. */
+        fifo_write(fifo, "onidle 1 focus 1\n");
+        settle(1500);
+
+        before = cpu_centiseconds(kid);
+        settle(3000);
+        after = cpu_centiseconds(kid);
+
+        if (before < 0 || after < 0) {
+            skip("idle: dvtm spends no CPU with nothing pending",
+                "could not read the process time");
+        } else {
+            snprintf(why, sizeof why,
+                "dvtm used %ld centiseconds of CPU over three idle seconds; "
+                "with nothing pending the loop should be asleep",
+                after - before);
+            check("idle: dvtm spends no CPU with nothing pending",
+                after - before <= 5, why);
+        }
+    }
+
+    reap();
+    unlink(fifo);
+}
+
 /* Being told to go away must not leave dvtm's fifos behind.
  *
  * The `-c` and `-s` pipes are dvtm's to remove, and cleanup() does remove them
@@ -2837,6 +3035,23 @@ int main(int argc, char *argv[]) {
     /* Deterministic child shell, whatever the developer's login shell is. */
     setenv("SHELL", "/bin/sh", 1);
 
+    /* A UTF-8 locale, pinned for the same reason as the shell above: dvtm calls
+     * setlocale(LC_CTYPE, "") and this harness decodes the screen the same way,
+     * so under a C locale the multibyte checks fail on the machine rather than
+     * on dvtm. Names differ between libcs; the first one here wins. */
+    {
+        static const char *const utf8[] = { "C.UTF-8", "en_US.UTF-8", "UTF-8" };
+        const char *picked = NULL;
+
+        for (unsigned i = 0; i < sizeof utf8 / sizeof *utf8 && !picked; i++)
+            if (setlocale(LC_CTYPE, utf8[i]))
+                picked = utf8[i];
+        if (!picked)
+            die("no UTF-8 locale here; tried C.UTF-8, en_US.UTF-8 and UTF-8");
+        setenv("LC_ALL", picked, 1);
+        setenv("LANG", picked, 1);
+    }
+
     /* A stand-in editor, so the copy mode checks measure dvtm rather than
      * whichever editor this machine happens to have. See tests/editor. */
     {
@@ -2924,6 +3139,9 @@ int main(int argc, char *argv[]) {
     t_flag_mouse();
     t_flag_escdelay();
     t_fifos();
+    t_send();
+    t_minimize_onidle();
+    t_idle_costs_nothing();
     t_hangup();
 
     printf("\n%d checks, %d failed, %d skipped\n", checks, failures, skipped);
