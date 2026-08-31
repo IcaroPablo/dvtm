@@ -383,6 +383,25 @@ static void settitle(Client *c) {
     }
 }
 
+/* Pass the selected window's cursor shape on to the terminal dvtm draws into,
+ * which is the only one with a cursor to shape. Sent on change alone: a window
+ * that never asks leaves whatever the user set, and 0 puts that back when the
+ * focus moves to one. Written straight out, the way the title is, because
+ * curses has no capability for it and no cell to put it in. */
+static void applycursorstyle(void) {
+    static int last;
+    const char *term;
+    int style = sel ? term_cursor_style(sel->term) : 0;
+
+    if (style == last)
+        return;
+    if ((term = getenv("TERM")) && strstr(term, "linux"))
+        return;
+    printf("\033[%d q", style);
+    fflush(stdout);
+    last = style;
+}
+
 static void detachstack(Client *c) {
     Client **tc;
     for (tc = &stack; *tc && *tc != c; tc = &(*tc)->snext)
@@ -1903,6 +1922,7 @@ int main(int argc, char *argv[]) {
         }
 
         doupdate();
+        applycursorstyle();
         sigprocmask(SIG_UNBLOCK, &blockset, NULL);
         r = select(nfds + 1, &rd, &wr, NULL, waiting() ? &tv : NULL);
         if (r == 0)

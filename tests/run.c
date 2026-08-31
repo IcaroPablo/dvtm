@@ -2373,6 +2373,26 @@ static void t_idle_costs_nothing(void) {
     unlink(fifo);
 }
 
+/* The cursor shape a window asks for reaches the terminal dvtm draws into.
+ *
+ * A cursor has no cell on the screen, so this is asserted on the bytes dvtm
+ * wrote out rather than on what was drawn. libvterm splits DECSCUSR into a shape
+ * and a blink and dvtm puts them back together, so asking for 5 has to come out
+ * as 5 and not as the steady 6. */
+static void t_cursor_shape(void) {
+    start("tests/probe cursorstyle", NULL, NULL);
+
+    if (!wait_screen("CURSORASKED", 5000))
+        fail("cursor: the window is up", "the probe never announced itself");
+    else
+        check("the cursor shape a window asks for is passed on",
+            wait_bytes("\033[5 q", 4000),
+            "the child asked for a blinking bar and dvtm sent the outer "
+            "terminal nothing, or sent a different shape");
+
+    reap();
+}
+
 /* Being told to go away must not leave dvtm's fifos behind.
  *
  * The `-c` and `-s` pipes are dvtm's to remove, and cleanup() does remove them
@@ -3142,6 +3162,7 @@ int main(int argc, char *argv[]) {
     t_send();
     t_minimize_onidle();
     t_idle_costs_nothing();
+    t_cursor_shape();
     t_hangup();
 
     printf("\n%d checks, %d failed, %d skipped\n", checks, failures, skipped);

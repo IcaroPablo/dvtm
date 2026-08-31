@@ -223,6 +223,12 @@ int main(int argc, char *argv[]) {
          * terminal's default colours, not in some colour of dvtm's choosing. */
         printf("PLAINTEXT\n");
         fflush(stdout);
+    } else if (!strcmp(what, "cursorstyle")) {
+        /* DECSCUSR: ask for a bar cursor. A cursor has no cell, so the check
+         * this feeds reads the bytes dvtm wrote out rather than the screen. */
+        printf("\033[5 q");
+        printf("CURSORASKED\n");
+        fflush(stdout);
     } else if (!strcmp(what, "mark")) {
         printf("%s\n", argc > 2 ? argv[2] : "MARK");
         fflush(stdout);

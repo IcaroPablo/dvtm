@@ -113,6 +113,12 @@ static int cb_settermprop(VTermProp prop, VTermValue *val, void *user) {
         case VTERM_PROP_CURSORVISIBLE:
             t->cursor_visible = val->boolean;
             return 1;
+        case VTERM_PROP_CURSORSHAPE:
+            t->cursor_shape = val->number;
+            return 1;
+        case VTERM_PROP_CURSORBLINK:
+            t->cursor_blink = val->boolean;
+            return 1;
         case VTERM_PROP_TITLE:
             /* libvterm 0.3 reports the title as a fragment with a length; older
          * ones used a plain string. Take the fragment form. */
@@ -212,6 +218,10 @@ Term *term_create(int rows, int cols, int scroll_buf_sz) {
      * width, and what is cut is gone from the buffer, not just from view. */
     vterm_screen_enable_reflow(t->screen, 1);
     vterm_screen_reset(t->screen, 1);
+    /* The reset above reports a shape of its own. That is the default state of
+     * a new terminal, not the child asking for anything, and passing it on
+     * would impose a block cursor on every window the moment it opens. */
+    t->cursor_shape = 0;
     return t;
 }
 
@@ -619,6 +629,22 @@ int term_content_start(Term *t) {
 
 bool term_cursor_visible(Term *t) {
     return t->scroll ? false : t->cursor_visible;
+}
+
+/* What DECSCUSR would have to say to ask for this window's cursor, or 0 while
+ * the child has asked for nothing and the terminal's own is right. libvterm
+ * splits the sequence into a shape and a blink; this puts them back. */
+int term_cursor_style(Term *t) {
+    switch (t->cursor_shape) {
+        case VTERM_PROP_CURSORSHAPE_BLOCK:
+            return t->cursor_blink ? 1 : 2;
+        case VTERM_PROP_CURSORSHAPE_UNDERLINE:
+            return t->cursor_blink ? 3 : 4;
+        case VTERM_PROP_CURSORSHAPE_BAR_LEFT:
+            return t->cursor_blink ? 5 : 6;
+        default:
+            return 0;
+    }
 }
 
 /* ── copy mode ────────────────────────────────────────────────────────────── */

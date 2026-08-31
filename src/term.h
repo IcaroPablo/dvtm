@@ -63,6 +63,10 @@ struct Term {
 
     bool cursor_visible;
     VTermPos cursor;
+    /* The shape the child asked for, as libvterm reports it, and 0 while it has
+     * asked for nothing. See term_cursor_style(). */
+    int cursor_shape;
+    bool cursor_blink;
     bool dirty;
 
     /* scrollback ring; oldest at `first`, `count` entries in use */
@@ -123,6 +127,7 @@ void term_scroll(Term *, int rows);
 int term_content_start(Term *);
 size_t term_content_get(Term *, char **s, bool colored);
 bool term_cursor_visible(Term *);
+int term_cursor_style(Term *);
 
 void term_draw(Term *, WINDOW *win, int startrow, int startcol);
 /* An ncurses colour pair for fg/bg. A NULL terminal means the program's own
