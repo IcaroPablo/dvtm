@@ -4,7 +4,9 @@ PREFIX ?= ${HOME}/.local
 MANPREFIX = ${PREFIX}/share/man
 # specify your systems terminfo directory
 # leave empty to install into your home folder
-TERMINFO := ${DESTDIR}${PREFIX}/share/terminfo
+# With PREFIX under $HOME the line below installs where ncurses never looks.
+# TERMINFO := ${DESTDIR}${PREFIX}/share/terminfo
+TERMINFO :=
 
 # Truecolor needs ncursesw >= 6.1 built with --enable-ext-colors: alloc_pair()
 # and the extended pair argument of wcolor_set(). Ask the library's own *-config
