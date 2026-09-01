@@ -223,6 +223,27 @@ int main(int argc, char *argv[]) {
          * terminal's default colours, not in some colour of dvtm's choosing. */
         printf("PLAINTEXT\n");
         fflush(stdout);
+    } else if (!strcmp(what, "mousereport")) {
+        /* Ask for mouse events and report what arrives, so a check can tell
+         * "dvtm passed the wheel on" from "dvtm kept it for the scrollback". */
+        struct termios old, raw;
+        char buf[64];
+        int n;
+
+        if (tcgetattr(STDIN_FILENO, &old) == 0) {
+            raw = old;
+            raw.c_lflag &= (tcflag_t) ~(ICANON | ECHO);
+            raw.c_cc[VMIN] = 0;
+            raw.c_cc[VTIME] = 0;
+            tcsetattr(STDIN_FILENO, TCSANOW, &raw);
+        }
+        printf("\033[?1000h\033[?1006h");
+        printf("MOUSEREADY\n");
+        fflush(stdout);
+
+        n = reply(buf, sizeof buf, 10000);
+        printf("GOT=%d\n", n > 0);
+        fflush(stdout);
     } else if (!strcmp(what, "cursorstyle")) {
         /* DECSCUSR: ask for a bar cursor. A cursor has no cell, so the check
          * this feeds reads the bytes dvtm wrote out rather than the screen. */

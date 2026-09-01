@@ -763,7 +763,10 @@ static void mouse_setup(void) {
     mmask_t mask = 0;
 
     if (mouse_events_enabled) {
-        mask = BUTTON1_CLICKED | BUTTON2_CLICKED;
+        mask = BUTTON1_CLICKED | BUTTON2_CLICKED | BUTTON4_PRESSED;
+#if NCURSES_MOUSE_VERSION > 1
+        mask |= BUTTON5_PRESSED;
+#endif
         for (unsigned int i = 0; i < LENGTH(buttons); i++)
             mask |= buttons[i].mask;
     }
@@ -1616,6 +1619,12 @@ static void handle_cmdfifo(void) {
     run_cmdline(cmdbuf);
 }
 
+#if NCURSES_MOUSE_VERSION > 1
+#define WHEEL_MASK (BUTTON4_PRESSED | BUTTON5_PRESSED)
+#else
+#define WHEEL_MASK (BUTTON4_PRESSED)
+#endif
+
 static void handle_mouse(void) {
     MEVENT event;
     unsigned int i;
@@ -1628,6 +1637,20 @@ static void handle_mouse(void) {
 
     debug("mouse x:%d y:%d cx:%d cy:%d mask:%d\n", event.x, event.y,
         event.x - msel->x, event.y - msel->y, event.bstate);
+
+    /* The wheel belongs to whoever can use it. A program that asked for mouse
+     * events gets it like any other button. One that did not leaves it for the
+     * scrollback -- except on the alternate screen, whose scrollback is the one
+     * belonging to the shell underneath, and drawing that over a full-screen
+     * program is worse than doing nothing. */
+    if (!term_wants_mouse(msel->term) && !term_altscreen(msel->term) &&
+        (event.bstate & WHEEL_MASK)) {
+        term_scroll(msel->term, event.bstate & BUTTON4_PRESSED ? -3 : 3);
+        draw(msel);
+        curs_set(term_cursor_visible(sel->term));
+        msel = NULL;
+        return;
+    }
 
     term_mouse(msel->term, event.x - msel->x, event.y - msel->y, event.bstate);
 

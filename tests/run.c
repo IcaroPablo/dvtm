@@ -2393,6 +2393,56 @@ static void t_cursor_shape(void) {
     reap();
 }
 
+/* One wheel notch over a window, in the encoding dvtm asks the outer terminal
+ * for (SGR, `\033[?1006h`): 64 is a notch up and 65 one down. */
+static void wheel(bool up, int x, int y) {
+    char seq[32];
+
+    snprintf(seq, sizeof seq, "\033[<%d;%d;%dM", up ? 64 : 65, x, y);
+    tty_write(seq, strlen(seq));
+}
+
+/* The wheel goes to the program when it asked for mouse events, and to the
+ * scrollback when it did not. Both halves matter: one of them is what a shell
+ * needs and the other is what an editor needs, and getting it wrong is silent
+ * either way -- a wheel that does nothing, or a shell's history drawn over a
+ * full-screen program. */
+static void t_wheel(void) {
+    setenv("FILL_LINES", "300", 1);
+    start("tests/fill", NULL, NULL);
+    unsetenv("FILL_LINES");
+
+    if (!wait_screen("FILLED", 6000)) {
+        fail("wheel: the window has a history", "the filler never finished");
+    } else {
+        char before[256], after[256];
+
+        screen_row(0, before, sizeof before);
+        for (int i = 0; i < 4; i++)
+            wheel(true, 10, 10);
+        settle(600);
+        screen_row(0, after, sizeof after);
+        check("the wheel scrolls back a window that wants no mouse",
+            strcmp(before, after) != 0,
+            "four notches over a shell-like window and the top row never "
+            "changed, so nothing was scrolled");
+    }
+    reap();
+
+    start("tests/probe mousereport", NULL, NULL);
+    if (!wait_screen("MOUSEREADY", 5000)) {
+        fail("wheel: the window asked for mouse events",
+            "the probe never announced itself");
+    } else {
+        wheel(true, 10, 10);
+        check("the wheel reaches a program that asked for mouse events",
+            wait_screen("GOT=1", 4000),
+            "the window had mouse reporting on and the notch never arrived -- "
+            "it was kept for the scrollback instead");
+    }
+    reap();
+}
+
 /* Being told to go away must not leave dvtm's fifos behind.
  *
  * The `-c` and `-s` pipes are dvtm's to remove, and cleanup() does remove them
@@ -3163,6 +3213,7 @@ int main(int argc, char *argv[]) {
     t_minimize_onidle();
     t_idle_costs_nothing();
     t_cursor_shape();
+    t_wheel();
     t_hangup();
 
     printf("\n%d checks, %d failed, %d skipped\n", checks, failures, skipped);

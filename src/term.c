@@ -119,6 +119,12 @@ static int cb_settermprop(VTermProp prop, VTermValue *val, void *user) {
         case VTERM_PROP_CURSORBLINK:
             t->cursor_blink = val->boolean;
             return 1;
+        case VTERM_PROP_MOUSE:
+            t->mouse = val->number;
+            return 1;
+        case VTERM_PROP_ALTSCREEN:
+            t->altscreen = val->boolean;
+            return 1;
         case VTERM_PROP_TITLE:
             /* libvterm 0.3 reports the title as a fragment with a length; older
          * ones used a plain string. Take the fragment form. */
@@ -599,6 +605,12 @@ void term_mouse(Term *t, int x, int y, mmask_t mask) {
         vterm_mouse_button(t->vt, 3, true, VTERM_MOD_NONE);
     else if (mask & BUTTON3_RELEASED)
         vterm_mouse_button(t->vt, 3, false, VTERM_MOD_NONE);
+    else if (mask & BUTTON4_PRESSED)
+        vterm_mouse_button(t->vt, 4, true, VTERM_MOD_NONE);
+#if NCURSES_MOUSE_VERSION > 1
+    else if (mask & BUTTON5_PRESSED)
+        vterm_mouse_button(t->vt, 5, true, VTERM_MOD_NONE);
+#endif
 
     flush_output(t);
 }
@@ -634,6 +646,14 @@ bool term_cursor_visible(Term *t) {
 /* What DECSCUSR would have to say to ask for this window's cursor, or 0 while
  * the child has asked for nothing and the terminal's own is right. libvterm
  * splits the sequence into a shape and a blink; this puts them back. */
+bool term_wants_mouse(Term *t) {
+    return t->mouse != VTERM_PROP_MOUSE_NONE;
+}
+
+bool term_altscreen(Term *t) {
+    return t->altscreen;
+}
+
 int term_cursor_style(Term *t) {
     switch (t->cursor_shape) {
         case VTERM_PROP_CURSORSHAPE_BLOCK:

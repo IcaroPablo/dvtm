@@ -67,6 +67,8 @@ struct Term {
      * asked for nothing. See term_cursor_style(). */
     int cursor_shape;
     bool cursor_blink;
+    int mouse; /* what the child asked to be told about, VTERM_PROP_MOUSE_* */
+    bool altscreen;
     bool dirty;
 
     /* scrollback ring; oldest at `first`, `count` entries in use */
@@ -128,6 +130,8 @@ int term_content_start(Term *);
 size_t term_content_get(Term *, char **s, bool colored);
 bool term_cursor_visible(Term *);
 int term_cursor_style(Term *);
+bool term_wants_mouse(Term *);
+bool term_altscreen(Term *);
 
 void term_draw(Term *, WINDOW *win, int startrow, int startcol);
 /* An ncurses colour pair for fg/bg. A NULL terminal means the program's own
