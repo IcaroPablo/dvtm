@@ -54,13 +54,17 @@ INCS = -I. -Isrc -Isrc/layouts ${NCURSES_CFLAGS} ${VTERM_CFLAGS}
 # and -lc with it -- every compiler links the C library on its own.
 LIBS = ${NCURSES_LIBS} ${VTERM_LIBS}
 # _DARWIN_C_SOURCE brings back SIGWINCH, which _POSIX_C_SOURCE hides on macOS;
-# every other system just ignores the macro.
+# every other system just ignores the macro. _BSD_SOURCE does the same on
+# OpenBSD, where _XOPEN_SOURCE=700 caps POSIX at 2008 and SIGWINCH only arrived
+# in 2024. glibc calls _BSD_SOURCE deprecated unless _DEFAULT_SOURCE comes too,
+# so it does.
 #
 # Its own variable, and not CPPFLAGS, for the same reason DVTM_CFLAGS exists:
 # CPPFLAGS is the user's, every ports tree sets it, and while these four lived
 # there a `make CPPFLAGS=-DFOO` deleted them. Without _XOPEN_SOURCE=700 a C99
 # build gets no posix_openpt, ptsname or realpath from glibc, and stops.
-DVTM_CPPFLAGS = -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -D_XOPEN_SOURCE_EXTENDED -D_DARWIN_C_SOURCE
+DVTM_CPPFLAGS = -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -D_XOPEN_SOURCE_EXTENDED -D_DARWIN_C_SOURCE \
+	-D_BSD_SOURCE -D_DEFAULT_SOURCE
 # Warn by default. Without this the normal build passes no -W flags at all and
 # a new warning goes unseen until someone happens to run `make debug`.
 # -Wno-unused-parameter because every key binding takes an args[] it ignores.
